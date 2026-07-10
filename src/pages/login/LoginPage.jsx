@@ -7,7 +7,7 @@ import { ErrorMessage } from '../../components/ui/ErrorMessage.jsx';
 import logoImg from '../../assets/logo/logo.png';
 import tlsuschool from '../../assets/landingpage/tlsuschool.png';
 
-export const LoginPage = () => {
+const LoginPage = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -293,3 +293,5 @@ export const LoginPage = () => {
     </div>
   );
 };
+
+export default LoginPage;

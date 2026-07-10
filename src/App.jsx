@@ -1,9 +1,10 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext.jsx';
 import { ProtectedRoute } from './components/ProtectedRoute.jsx';
-import { LandingPage } from './pages/landingpage/LandingPage.jsx';
-import { LoginPage } from './pages/login/LoginPage.jsx';
-import { AdminDashboard } from './pages/admin/AdminDashboard.jsx';
+import LandingPage from './pages/landingpage/LandingPage.jsx';
+import LoginPage from './pages/login/LoginPage.jsx';
+import AdminDashboard from './pages/admin/AdminDashboard.jsx';
+import StudentDashboard from './pages/student/StudentDashboard.jsx';
 import { NotFound } from './pages/error/NotFound.jsx';
 
 
@@ -21,7 +22,7 @@ function App() {
       <Router>
         <Routes>
           <Route path="/" element={<LandingPage />} />
-          <Route path="login/login" element={<LoginPage />} />
+          <Route path="/login" element={<LoginPage />} />
 
           {/* Admin layout with structural sub-routes nested inside */}
           <Route
@@ -42,8 +43,18 @@ function App() {
             <Route path="settings" element={<AdminSettingsView />} />
           </Route>
 
-          <Route path="error/404" element={<NotFound />} />
-          <Route path="*" element={<Navigate to="/error/404" replace />} />
+          {/* Student dashboard route */}
+          <Route
+            path="/student/dashboard"
+            element={
+              <ProtectedRoute requiredRole="student">
+                <StudentDashboard />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route path="/error/404" element={<NotFound />} />
+          <Route path="*" element={<NotFound />} />
         </Routes>
       </Router>
     </AuthProvider>

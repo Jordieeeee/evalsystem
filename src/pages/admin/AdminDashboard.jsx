@@ -1,26 +1,39 @@
 import { useAuth } from '../../context/AuthContext.jsx';
 import { Button } from '../../components/ui/Button.jsx';
 import { Link, Outlet, useLocation } from 'react-router-dom';
-import { 
-  LayoutDashboard, 
-  Users, 
-  BookOpen, 
-  ClipboardCheck, 
-  FileBarChart2, 
-  Settings, 
+import logo from '/src/assets/logo/logo.png';
+import { useState } from 'react';
+import {
+  LayoutDashboard,
+  Users,
+  BookOpen,
+  ClipboardCheck,
+  FileBarChart2,
+  Settings,
   LogOut,
   Bell,
   Moon,
   ChevronDown,
-  Search
+  Search,
+  X
 } from 'lucide-react';
 
-export const AdminDashboard = () => {
+const AdminDashboard = () => {
   const { signOut } = useAuth();
   const location = useLocation();
+  const [showLogoutModal, setShowLogoutModal] = useState(false);
 
   const handleSignOut = async () => {
+    setShowLogoutModal(true);
+  };
+
+  const confirmLogout = async () => {
+    setShowLogoutModal(false);
     await signOut();
+  };
+
+  const cancelLogout = () => {
+    setShowLogoutModal(false);
   };
 
   const menuItems = [
@@ -34,15 +47,15 @@ export const AdminDashboard = () => {
 
   return (
     <div className="min-h-screen bg-[#f1f5e9] flex flex-col font-sans antialiased text-slate-800">
-      
+
       {/* 1. Global High-End Top Navigation Bar (Matches Landing Page Layout Exactly) */}
       <header className="h-16 bg-white border-b border-slate-200/60 sticky top-0 z-40 px-6 flex items-center justify-between shadow-xs">
         {/* Left Side: Brand Logo and School Name Identity */}
         <div className="flex items-center gap-3">
           <div className="w-9 h-9 rounded-full bg-slate-50 p-0.5 border border-slate-200 flex items-center justify-center overflow-hidden shadow-xs">
-            <img 
-              src="/src/assets/logo.png" 
-              alt="The Last Salle University Seal" 
+            <img
+              src={logo}
+              alt="The Last Salle University Seal"
               className="w-full h-full object-contain"
               onError={(e) => {
                 e.target.style.display = 'none';
@@ -51,17 +64,17 @@ export const AdminDashboard = () => {
             />
           </div>
           <div>
-            <h1 className="text-sm font-black uppercase tracking-wider text-[#0F2A1D] leading-none">The Last Salle University</h1>
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">Administrator Portal</p>
+            <h1 className="font-serif text-lg font-bold tracking-tight block leading-tight text-sm font-black uppercase tracking-wider text-[#0F2A1D] leading-none">The Last Salle University</h1>
+            <p className="font-serif text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">Administrator Portal</p>
           </div>
         </div>
 
         {/* Middle: Integrated Global Context Search Bar */}
         <div className="hidden md:flex items-center relative w-80">
           <Search className="absolute left-3.5 text-slate-400" size={14} />
-          <input 
-            type="text" 
-            placeholder="Search students, subjects, evaluations..." 
+          <input
+            type="text"
+            placeholder="Search students, subjects, evaluations..."
             className="w-full bg-slate-50 border border-slate-200 text-xs pl-10 pr-4 py-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#375534]/15 focus:bg-white transition-all text-slate-800 font-semibold placeholder-slate-400"
           />
         </div>
@@ -75,7 +88,7 @@ export const AdminDashboard = () => {
           <button className="p-2 text-slate-500 hover:text-[#0F2A1D] hover:bg-slate-100 rounded-xl transition-all">
             <Moon size={16} />
           </button>
-          
+
           <div className="h-5 w-[1px] bg-slate-200 mx-1" />
 
           {/* Admin Avatar Identity Item */}
@@ -84,7 +97,7 @@ export const AdminDashboard = () => {
               A
             </div>
             <div className="hidden sm:block text-left leading-none">
-              <p className="text-xs font-black text-slate-800 flex items-center gap-1 group-hover:text-[#0F2A1D]">
+              <p className="font-serif text-lg font-bold tracking-tight block leading-tight text-xs font-black text-slate-800 flex items-center gap-1 group-hover:text-[#0F2A1D]">
                 Administrator <ChevronDown size={12} className="text-slate-400" />
               </p>
             </div>
@@ -94,11 +107,10 @@ export const AdminDashboard = () => {
 
       {/* 2. Main Workspace Structure Frame Below Top Nav */}
       <div className="flex-1 flex p-4 gap-4 w-full mx-auto min-h-[calc(screen-4rem)]">
-        
+
         {/* Left Sidebar Layout Panel */}
-        <aside className="w-60 bg-[#0F2A1D] rounded-3xl flex flex-col justify-between shadow-lg border border-emerald-950/30 p-3 shrink-0 text-[#E3EED4]">
+        <aside className="w-60 bg-[#0F2A1D] rounded-3xl flex flex-col justify-between shadow-lg border border-emerald-950/30 p-3 shrink-0 text-[#E3EED4]]">
           <nav className="space-y-1">
-            <p className="text-[9px] font-black uppercase text-[#6B9071] tracking-widest px-3 pt-2 pb-1.5">Navigation Framework</p>
             {menuItems.map((item) => {
               const isActive = location.pathname === item.path;
               return (
@@ -122,8 +134,8 @@ export const AdminDashboard = () => {
 
           {/* Sidebar Footer Account Action Button */}
           <div className="pt-2 border-t border-emerald-900/40">
-            <button 
-              onClick={handleSignOut} 
+            <button
+              onClick={handleSignOut}
               className="w-full flex items-center justify-center gap-2 bg-rose-950/20 hover:bg-rose-900/60 text-rose-200 text-xs font-bold tracking-wider uppercase py-3 rounded-xl border border-rose-900/30 transition-all"
             >
               <LogOut size={14} />
@@ -140,6 +152,48 @@ export const AdminDashboard = () => {
 
       </div>
 
+      {/* Logout Confirmation Modal */}
+      {showLogoutModal && (
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+            {/* Modal Header */}
+            <div className="bg-[#0F2A1D] text-[#E3EED4] p-5 flex justify-between items-center">
+              <h3 className="text-sm font-black uppercase tracking-wider">Confirm Logout</h3>
+              <button onClick={cancelLogout} className="text-[#AEC3B0] hover:text-white transition-colors">
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-6 text-center">
+              <div className="w-16 h-16 bg-rose-50 rounded-full flex items-center justify-center mx-auto mb-4">
+                <LogOut size={32} className="text-rose-600" />
+              </div>
+              <h4 className="text-lg font-bold text-slate-900 mb-2">Are you sure you want to logout?</h4>
+              <p className="text-sm text-slate-600">You will need to sign in again to access your account.</p>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-5 border-t border-slate-100 flex justify-end gap-3">
+              <button
+                onClick={cancelLogout}
+                className="px-5 py-2.5 rounded-xl bg-slate-100 text-slate-700 text-xs font-bold uppercase tracking-wider hover:bg-slate-200 transition-all"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmLogout}
+                className="px-5 py-2.5 rounded-xl bg-rose-600 text-white text-xs font-bold uppercase tracking-wider hover:bg-rose-700 transition-all shadow-sm"
+              >
+                Logout
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 };
+
+export default AdminDashboard;

@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom';
 
-export const Footer = ({ scrollToSection, logoImg }) => {
+const Footer = ({ scrollToSection, logoImg }) => {
   return (
     <footer className="w-full bg-forest-950 relative z-10">
 
@@ -111,3 +111,5 @@ export const Footer = ({ scrollToSection, logoImg }) => {
     </footer>
   );
 };
+
+export default Footer;
