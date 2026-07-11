@@ -1,6 +1,5 @@
-import { useState } from 'react';
 import { Printer, Download } from 'lucide-react';
-import universitySeal from '/src/assets/logo/logo.png';
+import universitySeal from '../../../assets/logo/logo.png';
 
 export default function StudentReportsPage() {
   const reportMetadata = {
@@ -66,7 +65,7 @@ export default function StudentReportsPage() {
           {/* Premium University Stamp Seal Graphic Integration */}
           <div className="w-24 h-24 rounded-full border border-slate-200/100 p-1 flex items-center justify-center overflow-hidden shrink-0 bg-slate-50 shadow-2xs self-center sm:self-start">
             <img 
-              src="/src/assets/logo/logo.png" 
+              src={universitySeal} 
               alt="The Last Salle University Seal" 
               className="w-full h-full object-contain brightness-105 contrast-105"
               onError={(e) => {
