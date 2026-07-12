@@ -18,6 +18,29 @@ export default function AdminReportsPage() {
 
   const [programData, setProgramData] = useState([]);
 
+  // Add print-specific styles
+  useEffect(() => {
+    const style = document.createElement('style');
+    style.textContent = `
+      @media print {
+        body * {
+          visibility: hidden;
+        }
+        .printable-area, .printable-area * {
+          visibility: visible;
+        }
+        .printable-area {
+          position: absolute;
+          left: 0;
+          top: 0;
+          width: 100%;
+        }
+      }
+    `;
+    document.head.appendChild(style);
+    return () => document.head.removeChild(style);
+  }, []);
+
   useEffect(() => {
     const fetchReportData = async () => {
       try {
@@ -128,10 +151,10 @@ export default function AdminReportsPage() {
         </div>
       </div>
 
-      <h3 className="text-lg font-bold text-slate-800 tracking-tight print:block">University Analytics</h3>
+      <h3 className="text-lg font-bold text-slate-800 tracking-tight print:hidden">University Analytics</h3>
 
-      {/* Top Summary Cards Metrics */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+      {/* Top Summary Cards Metrics - not printed, no wrapper */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 print:hidden">
         <div className="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-xs">
           <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Pass/Completion Ratio</p>
           <p className="text-3xl font-black text-slate-900 tracking-tight mt-2">{metrics.avgComplianceRate}</p>
@@ -159,8 +182,8 @@ export default function AdminReportsPage() {
         </div>
       </div>
 
-      {/* Program Performance Summary Sheet Grid Panel */}
-      <div className="bg-white rounded-3xl border border-slate-200/80 shadow-xs overflow-hidden mt-6">
+      {/* Program Performance Summary — THIS is the only thing that prints */}
+      <div className="printable-area bg-white rounded-3xl border border-slate-200/80 shadow-xs overflow-hidden mt-6">
         <div className="p-5 border-b border-slate-100 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 bg-slate-50/50 print:bg-transparent">
           <div>
             <h4 className="text-sm font-black uppercase tracking-wider text-slate-900">Program Performance Summary</h4>
@@ -168,8 +191,8 @@ export default function AdminReportsPage() {
           </div>
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
+        <div className="overflow-x-auto print:overflow-visible">
+          <table className="w-full text-left border-collapse print:table-fixed">
             <thead>
               <tr className="border-b border-slate-200/60 text-[10px] font-black text-slate-400 uppercase tracking-wider bg-slate-50/20 print:bg-transparent">
                 <th className="p-4 pl-6">Program</th>

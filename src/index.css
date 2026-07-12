@@ -45,3 +45,32 @@
     padding: 0;
   }
 }
+
+@media print {
+  body * {
+    visibility: hidden;
+  }
+
+  .printable-area,
+  .printable-area * {
+    visibility: visible;
+  }
+
+  .printable-area {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+  }
+}
+
+@media print {
+  .printable-area .overflow-x-auto {
+    overflow: visible;
+  }
+
+  .printable-area table {
+    width: 100%;
+    table-layout: fixed;
+  }
+}
