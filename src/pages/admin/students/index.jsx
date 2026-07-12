@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { UserPlus, Search, Filter, Edit3, Trash2, X, Loader2 } from 'lucide-react';
 import { studentService } from '../../../services/studentService';
 
@@ -10,6 +10,32 @@ export default function AdminStudentsPage() {
   const [editingStudent, setEditingStudent] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formData, setFormData] = useState({ id: '', name: '', email: '', course: 'BSIT', year: '1', status: 'active' });
+  
+  // Filter states
+  const [isFilterOpen, setIsFilterOpen] = useState(false);
+  const [filters, setFilters] = useState({
+    program: 'all',
+    year: 'all',
+    status: 'all'
+  });
+  const filterRef = useRef(null);
+
+  // Close filter dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (filterRef.current && !filterRef.current.contains(event.target)) {
+        setIsFilterOpen(false);
+      }
+    };
+
+    if (isFilterOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isFilterOpen]);
 
   useEffect(() => {
     let active = true;
@@ -127,12 +153,37 @@ export default function AdminStudentsPage() {
 
   const filteredStudents = students.filter((student) => {
     const search = searchQuery.toLowerCase();
-    return (
+    const matchesSearch = (
       (student.name || '').toLowerCase().includes(search) ||
       (student.studentId || student.id || '').toLowerCase().includes(search) ||
       (student.program || student.course || '').toLowerCase().includes(search)
     );
+    
+    const matchesProgram = filters.program === 'all' || 
+      (student.program || student.course || '') === filters.program;
+    
+    const matchesYear = filters.year === 'all' || 
+      (student.year || '') === filters.year;
+    
+    const matchesStatus = filters.status === 'all' || 
+      (student.status || 'active') === filters.status;
+    
+    return matchesSearch && matchesProgram && matchesYear && matchesStatus;
   });
+
+  const handleFilterChange = (filterType, value) => {
+    setFilters(prev => ({ ...prev, [filterType]: value }));
+  };
+
+  const resetFilters = () => {
+    setFilters({
+      program: 'all',
+      year: 'all',
+      status: 'all'
+    });
+  };
+
+  const hasActiveFilters = filters.program !== 'all' || filters.year !== 'all' || filters.status !== 'all';
 
   const getInitials = (name = '') => name.split(' ').filter(Boolean).slice(0, 2).map((part) => part[0]).join('').toUpperCase() || 'S';
 
@@ -169,9 +220,76 @@ export default function AdminStudentsPage() {
             className="w-full bg-slate-50 border border-slate-200 text-sm pl-12 pr-4 py-3.5 rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#375534]/20 focus:bg-white transition-all text-slate-800 placeholder-slate-400 font-medium"
           />
         </div>
-        <button className="flex items-center justify-center gap-2 bg-slate-50 border border-slate-200 text-slate-700 text-xs font-bold uppercase tracking-wider px-5 py-3 rounded-2xl hover:bg-slate-100 transition-all">
-          <Filter size={16} /> Filter
-        </button>
+        <div className="relative" ref={filterRef}>
+          <button 
+            onClick={() => setIsFilterOpen(!isFilterOpen)}
+            className={`flex items-center justify-center gap-2 border text-slate-700 text-xs font-bold uppercase tracking-wider px-5 py-3 rounded-2xl transition-all
+              ${hasActiveFilters ? 'bg-[#0F2A1D] text-[#E3EED4] border-[#0F2A1D]' : 'bg-slate-50 border-slate-200 hover:bg-slate-100'}`}
+          >
+            <Filter size={16} /> Filter {hasActiveFilters && `(${Object.values(filters).filter(f => f !== 'all').length})`}
+          </button>
+          
+          {isFilterOpen && (
+            <div className="absolute right-0 top-full mt-2 bg-white border border-slate-200 rounded-2xl shadow-xl p-4 w-64 z-10 animate-in fade-in zoom-in-95 duration-200">
+              <div className="flex justify-between items-center mb-3">
+                <h4 className="text-xs font-black uppercase tracking-wider text-slate-900">Filters</h4>
+                <button 
+                  onClick={resetFilters}
+                  className="text-[10px] font-bold text-[#375534] hover:text-[#0F2A1D] uppercase tracking-wider"
+                >
+                  Reset
+                </button>
+              </div>
+              
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">Program</label>
+                  <select
+                    value={filters.program}
+                    onChange={(e) => handleFilterChange('program', e.target.value)}
+                    className="w-full border border-slate-200 bg-slate-50 p-2.5 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#375534]/20 focus:bg-white transition-all text-xs font-bold text-slate-800"
+                  >
+                    <option value="all">All Programs</option>
+                    <option value="BSIT">BSIT</option>
+                    <option value="BSCS">BSCS</option>
+                    <option value="BSBA">BSBA</option>
+                    <option value="BSN">BSN</option>
+                    <option value="BSED">BSED</option>
+                    <option value="BSA">BSA</option>
+                  </select>
+                </div>
+                
+                <div>
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">Year Level</label>
+                  <select
+                    value={filters.year}
+                    onChange={(e) => handleFilterChange('year', e.target.value)}
+                    className="w-full border border-slate-200 bg-slate-50 p-2.5 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#375534]/20 focus:bg-white transition-all text-xs font-bold text-slate-800"
+                  >
+                    <option value="all">All Years</option>
+                    <option value="1">1st Year</option>
+                    <option value="2">2nd Year</option>
+                    <option value="3">3rd Year</option>
+                    <option value="4">4th Year</option>
+                  </select>
+                </div>
+                
+                <div>
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">Status</label>
+                  <select
+                    value={filters.status}
+                    onChange={(e) => handleFilterChange('status', e.target.value)}
+                    className="w-full border border-slate-200 bg-slate-50 p-2.5 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#375534]/20 focus:bg-white transition-all text-xs font-bold text-slate-800"
+                  >
+                    <option value="all">All Status</option>
+                    <option value="active">Active</option>
+                    <option value="inactive">Inactive</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
 
       <div className="bg-white rounded-3xl border border-slate-200/80 shadow-sm overflow-hidden">
