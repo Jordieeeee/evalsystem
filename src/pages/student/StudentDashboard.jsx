@@ -1,5 +1,5 @@
 import { useAuth } from '../../context/AuthContext.jsx';
-import { Link, Outlet, useLocation } from 'react-router-dom';
+import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useState } from 'react';
 import {
   LayoutDashboard,
@@ -17,6 +17,7 @@ import universityLogo from '../../assets/logo/logo.png';
 const StudentDashboard = () => {
   const { signOut } = useAuth();
   const location = useLocation();
+  const navigate = useNavigate();
   const [showLogoutModal, setShowLogoutModal] = useState(false);
 
   const handleSignOut = async () => {
@@ -26,6 +27,7 @@ const StudentDashboard = () => {
   const confirmLogout = async () => {
     setShowLogoutModal(false);
     await signOut();
+    navigate('/login');
   };
 
   const cancelLogout = () => {
@@ -47,7 +49,7 @@ const StudentDashboard = () => {
       <header className="h-16 bg-white border-b border-slate-100 sticky top-0 z-40 px-6 flex items-center justify-between shadow-xs">
         {/* Logo identity section linking to imported image asset */}
         <div className="flex items-center gap-3">
-          <div className="w-18 h-18 flex items-center justify-center overflow-hidden">
+          <div className="w-15 h-15 flex items-center justify-center overflow-hidden">
             <img
               src={universityLogo}
               alt="The Last Salle University Seal"

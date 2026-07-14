@@ -37,7 +37,11 @@ function App() {
           {/* Admin layout with structural sub-routes nested inside */}
           <Route
             path="/admin"
-            element={<AdminDashboard />}
+            element={
+              <ProtectedRoute requiredRole="admin">
+                <AdminDashboard />
+              </ProtectedRoute>
+            }
           >
             {/* These render exactly inside the <Outlet /> layout of AdminDashboard */}
             <Route index element={<Navigate to="dashboard" replace />} />

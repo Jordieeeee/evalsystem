@@ -14,11 +14,25 @@ export const AuthProvider = ({ children }) => {
   const [profile, setProfile] = useState(null);
 
   const signOut = async () => {
-    await firebaseSignOut();
-    setUser(null);
-    setRole(null);
-    setProfile(null);
-    setAuthError(null);
+    console.log('AuthContext signOut called');
+    try {
+      await firebaseSignOut();
+      console.log('AuthContext: Firebase sign out completed');
+      // Clear local state immediately
+      setUser(null);
+      setRole(null);
+      setProfile(null);
+      setAuthError(null);
+      console.log('AuthContext: Local state cleared');
+    } catch (error) {
+      console.error('AuthContext: Error during sign out:', error);
+      // Still clear local state even if sign out fails
+      setUser(null);
+      setRole(null);
+      setProfile(null);
+      setAuthError(null);
+      throw error;
+    }
   };
 
   const clearAuthError = () => {
@@ -26,44 +40,52 @@ export const AuthProvider = ({ children }) => {
   };
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-      if (firebaseUser) {
-        setUser(firebaseUser);
-        const userRole = await getUserRole(firebaseUser.uid);
-        if (userRole) {
-          setRole(userRole);
-          if (userRole === 'student') {
-            const studentProfile = await studentService.getProfile(firebaseUser.uid);
-            if (!studentProfile) {
-              await studentService.createStudentProfile(firebaseUser.uid, {
-                name: firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'Student',
-                email: firebaseUser.email || '',
-                studentId: firebaseUser.uid,
-                course: 'BSIT',
-                year: '1',
-                status: 'active'
-              });
+    const authUnsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      try {
+        if (firebaseUser) {
+          setUser(firebaseUser);
+          const userRole = await getUserRole(firebaseUser.uid);
+          if (userRole) {
+            setRole(userRole);
+            if (userRole === 'student') {
+              const studentProfile = await studentService.getProfile(firebaseUser.uid);
+              if (!studentProfile) {
+                await studentService.createStudentProfile(firebaseUser.uid, {
+                  name: firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'Student',
+                  email: firebaseUser.email || '',
+                  studentId: firebaseUser.uid,
+                  course: 'BSIT',
+                  year: '1',
+                  status: 'active'
+                });
+              }
+              setProfile(await studentService.getProfile(firebaseUser.uid));
             }
-            setProfile(await studentService.getProfile(firebaseUser.uid));
+            setAuthError(null);
+          } else {
+            await firebaseSignOut();
+            setUser(null);
+            setRole(null);
+            setProfile(null);
+            setAuthError('Account not recognized. Contact your administrator.');
           }
-          setAuthError(null);
         } else {
-          await firebaseSignOut();
           setUser(null);
           setRole(null);
           setProfile(null);
-          setAuthError('Account not recognized. Contact your administrator.');
+          setAuthError(null);
         }
-      } else {
-        setUser(null);
-        setRole(null);
-        setProfile(null);
-        setAuthError(null);
+      } catch (error) {
+        console.error('Auth state change error:', error);
+        setAuthError('Authentication error occurred. Please try again.');
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     });
 
-    return () => unsubscribe();
+    return () => {
+      authUnsubscribe();
+    };
   }, []);
 
   return (
