@@ -6,12 +6,7 @@ export const subjectService = {
   getAllSubjects: async () => {
     const subjectsRef = collection(db, 'new_subjects');
     const snapshot = await getDocs(subjectsRef);
-    console.log("=== FIRESTORE SNAPSHOT DEBUG ===");
-    console.log("Snapshot size:", snapshot.size);
-    console.log("Snapshot docs:", snapshot.docs);
-    console.log("Snapshot empty:", snapshot.empty);
     const subjects = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-    console.log("Mapped subjects:", subjects);
     return subjects;
   },
 

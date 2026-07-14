@@ -45,15 +45,9 @@ export default function AdminSubjectsPage() {
 		const loadSubjects = async () => {
 			try {
 				const liveSubjects = await subjectService.getAllSubjects();
-				console.log("=== FIRESTORE FETCH DEBUG ===");
-				console.log("Fetched subjects:", liveSubjects);
-				console.log("Subject count:", liveSubjects.length);
-				console.log("Subject details:", JSON.stringify(liveSubjects, null, 2));
 				setSubjects(liveSubjects);
 			} catch (error) {
-				console.error("=== FIRESTORE FETCH ERROR ===");
 				console.error("Failed to fetch subjects:", error);
-				console.error("Error details:", JSON.stringify(error, null, 2));
 				setSubjects([]);
 			} finally {
 				setLoading(false);
@@ -167,14 +161,6 @@ export default function AdminSubjectsPage() {
 			sub.id.toLowerCase().includes(searchQuery.toLowerCase())) &&
 			!(!sub.courseTitle && !sub.id) // Filter out invalid subjects
 	);
-
-	// Debug filtering
-	console.log("=== FILTERING DEBUG ===");
-	console.log("Total subjects:", subjects.length);
-	console.log("Search query:", searchQuery);
-	console.log("Filtered subjects:", filteredSubjects.length);
-	console.log("All subjects:", subjects);
-	console.log("Filtered subjects:", filteredSubjects);
 
 	if (loading) {
 		return (
@@ -446,13 +432,8 @@ export default function AdminSubjectsPage() {
 											autoFocus
 										/>
 										{(() => {
-											console.log("Dropdown subjects:", subjects);
 											const availableSubjects = subjects.filter(
 												(s) => s.id !== formData.id,
-											);
-											console.log(
-												"Available subjects (excluding self):",
-												availableSubjects,
 											);
 											const filtered = availableSubjects.filter(
 												(s) =>
@@ -463,7 +444,6 @@ export default function AdminSubjectsPage() {
 														.toLowerCase()
 														.includes(prereqSearch.toLowerCase()),
 											);
-											console.log("Filtered subjects:", filtered);
 
 											if (availableSubjects.length === 0) {
 												return (
