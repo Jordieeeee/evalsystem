@@ -1,6 +1,32 @@
 import { useEffect, useState, useRef } from 'react';
-import { UserPlus, Search, Filter, Edit3, Trash2, X, Loader2 } from 'lucide-react';
+import { UserPlus, Search, Filter, Edit3, Trash2, X, Loader2, ChevronDown } from 'lucide-react';
 import { studentService } from '../../../services/studentService';
+
+// Helper function to generate academic year options
+// Philippine academic calendar: June-March, so if current month is before June, academic year starts previous year
+const getAcademicYearOptions = () => {
+  const currentYear = new Date().getFullYear();
+  const currentMonth = new Date().getMonth(); // 0-11 (January is 0)
+
+  // If current month is before June (0-5), academic year starts previous year
+  // If current month is June or later (6-11), academic year starts current year
+  const startYear = currentMonth < 6 ? currentYear - 1 : currentYear;
+
+  // Generate options: 5 years back through 5 years forward (11 total options)
+  const options = [];
+  for (let i = -5; i <= 5; i++) {
+    const year = startYear + i;
+    options.push(`${year}-${year + 1}`);
+  }
+
+  return options;
+};
+
+// Get current academic year as default
+const getCurrentAcademicYear = () => {
+  const options = getAcademicYearOptions();
+  return options[5]; // The 6th option is the current academic year (index 5 in -5 to +5 range)
+};
 
 export default function AdminStudentsPage() {
   const [students, setStudents] = useState([]);
@@ -9,7 +35,9 @@ export default function AdminStudentsPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingStudent, setEditingStudent] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [formData, setFormData] = useState({ id: '', name: '', email: '', course: 'BSIT', year: '1', status: 'active' });
+  const [formData, setFormData] = useState({ id: '', name: '', email: '', course: 'BSIT', year: '1', school_year: getCurrentAcademicYear(), student_type: 'Regular', status: 'active' });
+
+  // TODO: Student Type should eventually be derived from actual subject completion vs. curriculum sequence, not manually entered
   
   // Filter states
   const [isFilterOpen, setIsFilterOpen] = useState(false);
@@ -63,7 +91,7 @@ export default function AdminStudentsPage() {
 
   const openAddModal = () => {
     setEditingStudent(null);
-    setFormData({ id: '', name: '', email: '', course: 'BSIT', year: '1', status: 'active' });
+    setFormData({ id: '', name: '', email: '', course: 'BSIT', year: '1', school_year: getCurrentAcademicYear(), student_type: 'Regular', status: 'active' });
     setIsModalOpen(true);
   };
 
@@ -75,6 +103,8 @@ export default function AdminStudentsPage() {
       email: student.email || '',
       course: student.program || student.course || 'BSIT',
       year: student.year || '1',
+      school_year: student.school_year || getCurrentAcademicYear(),
+      student_type: student.student_type || 'Regular',
       status: student.status || 'active'
     });
     setIsModalOpen(true);
@@ -101,7 +131,7 @@ export default function AdminStudentsPage() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!formData.id || !formData.name || !formData.email) {
+    if (!formData.id || !formData.name || !formData.email || !formData.school_year || !formData.student_type) {
       alert('Please complete the required student information.');
       return;
     }
@@ -117,6 +147,8 @@ export default function AdminStudentsPage() {
         course: formData.course,
         year: formData.year,
         yearSection: `${formData.year}${['1', '2', '3', '4'].includes(formData.year) ? ['st', 'nd', 'rd', 'th'][Number(formData.year) - 1] : 'th'} Year`,
+        school_year: formData.school_year,
+        student_type: formData.student_type,
         status: formData.status,
         createdAt: new Date().toISOString()
       };
@@ -142,7 +174,7 @@ export default function AdminStudentsPage() {
       }
 
       setIsModalOpen(false);
-      setFormData({ id: '', name: '', email: '', course: 'BSIT', year: '1', status: 'active' });
+      setFormData({ id: '', name: '', email: '', course: 'BSIT', year: '1', school_year: getCurrentAcademicYear(), student_type: 'Regular', status: 'active' });
     } catch (error) {
       console.error('Failed to save student:', error);
       alert('Unable to save the student record.');
@@ -442,6 +474,45 @@ export default function AdminStudentsPage() {
                     <option value="3">3</option>
                     <option value="4">4</option>
                   </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block uppercase tracking-wider mb-1.5 text-slate-400">School Year</label>
+                  <div className="relative">
+                    <select
+                      name="school_year"
+                      value={formData.school_year}
+                      onChange={handleInputChange}
+                      required
+                      className="w-full border border-slate-200 bg-slate-50 p-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#375534]/20 focus:bg-white transition-all text-slate-800 appearance-none pr-10"
+                    >
+                      {getAcademicYearOptions().map((year) => (
+                        <option key={year} value={year}>
+                          {year}
+                        </option>
+                      ))}
+                    </select>
+                    <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={16} />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block uppercase tracking-wider mb-1.5 text-slate-400">Student Type</label>
+                  <div className="relative">
+                    <select
+                      name="student_type"
+                      value={formData.student_type}
+                      onChange={handleInputChange}
+                      required
+                      className="w-full border border-slate-200 bg-slate-50 p-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#375534]/20 focus:bg-white transition-all text-slate-800 appearance-none pr-10"
+                    >
+                      <option value="Regular">Regular</option>
+                      <option value="Irregular">Irregular</option>
+                    </select>
+                    <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={16} />
+                  </div>
                 </div>
               </div>
 
