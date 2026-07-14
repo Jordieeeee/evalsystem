@@ -3,6 +3,7 @@ import { Printer, Download, Loader2 } from 'lucide-react';
 import universitySeal from '../../../assets/logo/logo.png';
 import { useAuth } from '../../../context/AuthContext';
 import { studentService } from '../../../services/studentService';
+import { ErrorState } from '../../../components/ui/ErrorState';
 
 export default function StudentReportsPage() {
   const { user, profile } = useAuth();
@@ -18,12 +19,15 @@ export default function StudentReportsPage() {
   });
   const [evaluationRecords, setEvaluationRecords] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     const fetchReports = async () => {
       if (!user?.uid) return;
       try {
         setLoading(true);
+        setError(null);
         const { currentSubjects, completedHistory } = await studentService.getAcademicRecords(user.uid);
         const records = [...currentSubjects, ...completedHistory].map((record) => ({
           code: record.subjectCode,
@@ -43,15 +47,16 @@ export default function StudentReportsPage() {
           semester: profile?.semester || '1st Semester',
           gwa: records.length > 0 ? (records.filter((record) => record.grade && record.grade !== 'PENDING' && record.grade !== '-').length / Math.max(records.length, 1)).toFixed(2) : '-'
         }));
-      } catch (error) {
-        console.error('Failed to load reports', error);
+      } catch (err) {
+        console.error('Failed to load reports', err);
+        setError('We could not load your academic report. Please try again.');
       } finally {
         setLoading(false);
       }
     };
 
     fetchReports();
-  }, [profile, user]);
+  }, [profile, user, reloadKey]);
 
   const triggerPrint = () => {
     window.print();
@@ -63,6 +68,10 @@ export default function StudentReportsPage() {
         <Loader2 className="animate-spin text-[#375534]" size={32} />
       </div>
     );
+  }
+
+  if (error) {
+    return <ErrorState message={error} onRetry={() => setReloadKey((key) => key + 1)} />;
   }
 
   return (

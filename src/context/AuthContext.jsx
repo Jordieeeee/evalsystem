@@ -14,24 +14,13 @@ export const AuthProvider = ({ children }) => {
   const [profile, setProfile] = useState(null);
 
   const signOut = async () => {
-    console.log('AuthContext signOut called');
     try {
       await firebaseSignOut();
-      console.log('AuthContext: Firebase sign out completed');
-      // Clear local state immediately
+    } finally {
       setUser(null);
       setRole(null);
       setProfile(null);
       setAuthError(null);
-      console.log('AuthContext: Local state cleared');
-    } catch (error) {
-      console.error('AuthContext: Error during sign out:', error);
-      // Still clear local state even if sign out fails
-      setUser(null);
-      setRole(null);
-      setProfile(null);
-      setAuthError(null);
-      throw error;
     }
   };
 
@@ -48,7 +37,7 @@ export const AuthProvider = ({ children }) => {
           if (userRole) {
             setRole(userRole);
             if (userRole === 'student') {
-              const studentProfile = await studentService.getProfile(firebaseUser.uid);
+              let studentProfile = await studentService.getProfile(firebaseUser.uid);
               if (!studentProfile) {
                 await studentService.createStudentProfile(firebaseUser.uid, {
                   name: firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'Student',
@@ -58,8 +47,9 @@ export const AuthProvider = ({ children }) => {
                   year: '1',
                   status: 'active'
                 });
+                studentProfile = await studentService.getProfile(firebaseUser.uid);
               }
-              setProfile(await studentService.getProfile(firebaseUser.uid));
+              setProfile(studentProfile);
             }
             setAuthError(null);
           } else {
@@ -76,8 +66,10 @@ export const AuthProvider = ({ children }) => {
           setAuthError(null);
         }
       } catch (error) {
-        console.error('Auth state change error:', error);
-        setAuthError('Authentication error occurred. Please try again.');
+        console.error('Failed to resolve authentication state:', error);
+        setRole(null);
+        setProfile(null);
+        setAuthError('We could not verify your account right now. Please try signing in again.');
       } finally {
         setLoading(false);
       }

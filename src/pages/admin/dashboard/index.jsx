@@ -7,10 +7,13 @@ import { studentService } from '../../../services/studentService';
 import { subjectService } from '../../../services/subjectService';
 import { evaluationService } from '../../../services/evaluationService';
 import { systemService } from '../../../services/systemService';
+import { ErrorState } from '../../../components/ui/ErrorState';
 import { Link } from 'react-router-dom';
 
 export default function AdminDashboardPage() {
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [reloadKey, setReloadKey] = useState(0);
   
   const [stats, setStats] = useState({
     totalStudents: 0,
@@ -39,6 +42,7 @@ export default function AdminDashboardPage() {
     const fetchDashboardData = async () => {
       try {
         setLoading(true);
+        setError(null);
         // Fetch all data in parallel including global academic config
         const [students, subjects, evaluations, config] = await Promise.all([
           studentService.getAllStudents(),
@@ -108,15 +112,16 @@ export default function AdminDashboardPage() {
         }));
         setActivityFeed(recentActivities.length ? recentActivities : [{ id: 1, text: 'No recent activity.', time: '' }]);
 
-      } catch (error) {
-        console.error("Dashboard data load failed:", error);
+      } catch (err) {
+        console.error("Dashboard data load failed:", err);
+        setError('We could not load the dashboard data. Please try again.');
       } finally {
         setLoading(false);
       }
     };
 
     fetchDashboardData();
-  }, []);
+  }, [reloadKey]);
 
   if (loading) {
     return (
@@ -124,6 +129,10 @@ export default function AdminDashboardPage() {
         <Loader2 className="animate-spin" size={36} />
       </div>
     );
+  }
+
+  if (error) {
+    return <ErrorState message={error} onRetry={() => setReloadKey((key) => key + 1)} />;
   }
 
   return (

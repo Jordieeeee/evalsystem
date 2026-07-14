@@ -32,6 +32,7 @@ export default function AdminSettingsPage() {
     activeSemester: '1st Semester'
   });
   const [isLoadingAcademic, setIsLoadingAcademic] = useState(true);
+  const [academicLoadError, setAcademicLoadError] = useState(null);
   const [isSavingAcademic, setIsSavingAcademic] = useState(false);
   const [saveSuccessAcademic, setSaveSuccessAcademic] = useState(false);
 
@@ -40,6 +41,7 @@ export default function AdminSettingsPage() {
     let isMounted = true;
     const fetchConfig = async () => {
       try {
+        if (isMounted) setAcademicLoadError(null);
         const config = await systemService.getAcademicConfig();
         if (isMounted && config) {
           setAcademicConfig({
@@ -49,6 +51,9 @@ export default function AdminSettingsPage() {
         }
       } catch (error) {
         console.error("Failed to load academic config", error);
+        if (isMounted) {
+          setAcademicLoadError('We could not load the live academic configuration. Showing default values.');
+        }
       } finally {
         if (isMounted) setIsLoadingAcademic(false);
       }
@@ -239,6 +244,12 @@ export default function AdminSettingsPage() {
               <h3 className="text-base font-black text-slate-900 tracking-tight">Academic Year & Term Configuration</h3>
               <p className="text-xs text-slate-500 mb-2">Controls the term filtering logic system-wide (e.g., eligible subject assignment scopes).</p>
               
+              {academicLoadError && !isLoadingAcademic && (
+                <div className="p-3 bg-rose-50 border border-rose-200 text-rose-700 rounded-xl text-xs font-bold normal-case">
+                  {academicLoadError}
+                </div>
+              )}
+
               {isLoadingAcademic ? (
                 <div className="flex items-center gap-2 text-sm font-bold text-slate-400 py-4">
                   <Loader2 className="animate-spin" size={16} /> Loading live configuration...

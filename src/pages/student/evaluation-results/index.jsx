@@ -2,18 +2,22 @@ import { useEffect, useState } from 'react';
 import { Download, Award, FileText, Loader2 } from 'lucide-react';
 import { useAuth } from '../../../context/AuthContext';
 import { studentService } from '../../../services/studentService';
+import { ErrorState } from '../../../components/ui/ErrorState';
 
 export default function StudentEvaluationResultsPage() {
   const { user } = useAuth();
   const [metrics, setMetrics] = useState({ cumulativeGpa: '-', totalCredits: 0 });
   const [evaluations, setEvaluations] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     const fetchRecords = async () => {
       if (!user?.uid) return;
       try {
         setLoading(true);
+        setError(null);
         const { completedHistory } = await studentService.getAcademicRecords(user.uid);
         const passedCount = completedHistory.filter((record) => record.status === 'Passed' || record.status === 'Excellent').length;
         setMetrics({
@@ -27,15 +31,16 @@ export default function StudentEvaluationResultsPage() {
           remarks: record.remarks || 'Recorded from evaluation',
           status: record.status
         })));
-      } catch (error) {
-        console.error('Failed to load evaluation results', error);
+      } catch (err) {
+        console.error('Failed to load evaluation results', err);
+        setError('We could not load your evaluation results. Please try again.');
       } finally {
         setLoading(false);
       }
     };
 
     fetchRecords();
-  }, [user]);
+  }, [user, reloadKey]);
 
   if (loading) {
     return (
@@ -43,6 +48,10 @@ export default function StudentEvaluationResultsPage() {
         <Loader2 className="animate-spin text-[#375534]" size={32} />
       </div>
     );
+  }
+
+  if (error) {
+    return <ErrorState message={error} onRetry={() => setReloadKey((key) => key + 1)} />;
   }
 
   return (

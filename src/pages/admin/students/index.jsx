@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef } from 'react';
 import { UserPlus, Search, Filter, Edit3, Trash2, X, Loader2, ChevronDown } from 'lucide-react';
 import { studentService } from '../../../services/studentService';
+import { ErrorState } from '../../../components/ui/ErrorState';
 
 // Helper function to generate academic year options
 // Philippine academic calendar: June-March, so if current month is before June, academic year starts previous year
@@ -31,6 +32,8 @@ const getCurrentAcademicYear = () => {
 export default function AdminStudentsPage() {
   const [students, setStudents] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [reloadKey, setReloadKey] = useState(0);
   const [searchQuery, setSearchQuery] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingStudent, setEditingStudent] = useState(null);
@@ -70,12 +73,16 @@ export default function AdminStudentsPage() {
     const loadStudents = async () => {
       try {
         setLoading(true);
+        setError(null);
         const data = await studentService.getAllStudents();
         if (active) {
           setStudents(data);
         }
-      } catch (error) {
-        console.error('Failed to load students:', error);
+      } catch (err) {
+        console.error('Failed to load students:', err);
+        if (active) {
+          setError('We could not load the student directory. Please try again.');
+        }
       } finally {
         if (active) {
           setLoading(false);
@@ -87,7 +94,7 @@ export default function AdminStudentsPage() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [reloadKey]);
 
   const openAddModal = () => {
     setEditingStudent(null);
@@ -225,6 +232,10 @@ export default function AdminStudentsPage() {
         <Loader2 className="animate-spin" size={32} />
       </div>
     );
+  }
+
+  if (error) {
+    return <ErrorState message={error} onRetry={() => setReloadKey((key) => key + 1)} />;
   }
 
   return (

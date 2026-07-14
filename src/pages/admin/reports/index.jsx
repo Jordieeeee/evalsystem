@@ -4,9 +4,12 @@ import {
 } from 'lucide-react';
 import { studentService } from '../../../services/studentService';
 import { evaluationService } from '../../../services/evaluationService';
+import { ErrorState } from '../../../components/ui/ErrorState';
 
 export default function AdminReportsPage() {
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [reloadKey, setReloadKey] = useState(0);
   
   const [metrics, setMetrics] = useState({
     avgComplianceRate: '0%',
@@ -45,6 +48,7 @@ export default function AdminReportsPage() {
     const fetchReportData = async () => {
       try {
         setLoading(true);
+        setError(null);
         const [students, evaluations] = await Promise.all([
           studentService.getAllStudents(),
           evaluationService.getAllEvaluations()
@@ -114,15 +118,16 @@ export default function AdminReportsPage() {
 
         setProgramData(finalProgramData);
 
-      } catch (error) {
-        console.error("Report data load failed:", error);
+      } catch (err) {
+        console.error("Report data load failed:", err);
+        setError('We could not load the reports data. Please try again.');
       } finally {
         setLoading(false);
       }
     };
 
     fetchReportData();
-  }, []);
+  }, [reloadKey]);
 
   const triggerPrint = () => window.print();
 
@@ -132,6 +137,10 @@ export default function AdminReportsPage() {
         <Loader2 className="animate-spin" size={36} />
       </div>
     );
+  }
+
+  if (error) {
+    return <ErrorState message={error} onRetry={() => setReloadKey((key) => key + 1)} />;
   }
 
   return (
