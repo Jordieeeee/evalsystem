@@ -2,6 +2,8 @@ import { useCallback, useEffect, useState } from 'react';
 import { Search, Plus, X, CheckCircle2, Loader2, Printer, FileText } from 'lucide-react';
 import { evaluationService } from '../../../services/evaluationService';
 import { studentService } from '../../../services/studentService';
+import { formatDate } from '../../../utils/format';
+import { LoadingSpinner } from '../../../components/ui/LoadingSpinner';
 
 export default function AdminEvaluationPage() {
   const [evaluations, setEvaluations] = useState([]);
@@ -177,12 +179,7 @@ export default function AdminEvaluationPage() {
   );
 
   if (isPageLoading) {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-[50vh] text-[#375534] space-y-4">
-        <Loader2 className="animate-spin" size={32} />
-        <p className="text-xs font-bold uppercase tracking-widest text-slate-400">Loading Registry...</p>
-      </div>
-    );
+    return <LoadingSpinner label="Loading Registry..." className="min-h-[50vh]" />;
   }
 
   return (
@@ -243,7 +240,7 @@ export default function AdminEvaluationPage() {
                       </span>
                     </td>
                     <td className="p-4 text-slate-400 font-mono tracking-tight">
-                      {ev.assignedDate ? new Date(ev.assignedDate).toLocaleDateString() : 'N/A'}
+                      {formatDate(ev.assignedDate)}
                     </td>
                   </tr>
                 ))

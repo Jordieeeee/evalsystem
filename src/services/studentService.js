@@ -1,11 +1,12 @@
 import { db } from './firebase';
 import { collection, query, where, getDocs, doc, getDoc, setDoc, updateDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
+import { mapSnapshot, docToData } from './firestoreUtils';
 
 export const studentService = {
   getProfile: async (studentId) => {
     const docRef = doc(db, 'students', studentId);
     const snap = await getDoc(docRef);
-    return snap.exists() ? { id: snap.id, ...snap.data() } : null;
+    return docToData(snap);
   },
 
   createStudentProfile: async (studentId, payload = {}) => {
@@ -47,8 +48,7 @@ export const studentService = {
     const q = query(recordsRef, where('studentId', '==', studentId));
     const snapshot = await getDocs(q);
 
-    const allRecords = snapshot.docs
-      .map((recordDoc) => ({ id: recordDoc.id, ...recordDoc.data() }))
+    const allRecords = mapSnapshot(snapshot)
       .sort((a, b) => new Date(b.assignedDate || 0) - new Date(a.assignedDate || 0));
 
     const currentSubjects = allRecords.filter((r) =>
@@ -65,6 +65,6 @@ export const studentService = {
   getAllStudents: async () => {
     const studentsRef = collection(db, 'students');
     const snapshot = await getDocs(studentsRef);
-    return snapshot.docs.map((studentDoc) => ({ id: studentDoc.id, ...studentDoc.data() }));
+    return mapSnapshot(snapshot);
   }
 };

@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef } from 'react';
 import { UserPlus, Search, Filter, Edit3, Trash2, X, Loader2, ChevronDown } from 'lucide-react';
 import { studentService } from '../../../services/studentService';
+import { LoadingSpinner } from '../../../components/ui/LoadingSpinner';
 
 // Helper function to generate academic year options
 // Philippine academic calendar: June-March, so if current month is before June, academic year starts previous year
@@ -220,11 +221,7 @@ export default function AdminStudentsPage() {
   const getInitials = (name = '') => name.split(' ').filter(Boolean).slice(0, 2).map((part) => part[0]).join('').toUpperCase() || 'S';
 
   if (loading) {
-    return (
-      <div className="flex justify-center items-center h-64 text-[#375534]">
-        <Loader2 className="animate-spin" size={32} />
-      </div>
-    );
+    return <LoadingSpinner className="h-64" />;
   }
 
   return (

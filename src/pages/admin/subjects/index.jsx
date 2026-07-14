@@ -13,6 +13,7 @@ import {
 	Pencil,
 } from "lucide-react";
 import { subjectService } from "../../../services/subjectService";
+import { LoadingSpinner } from "../../../components/ui/LoadingSpinner";
 
 export default function AdminSubjectsPage() {
 	const [subjects, setSubjects] = useState([]);
@@ -177,11 +178,7 @@ export default function AdminSubjectsPage() {
 	console.log("Filtered subjects:", filteredSubjects);
 
 	if (loading) {
-		return (
-			<div className="flex justify-center items-center h-64 text-[#375534]">
-				<Loader2 className="animate-spin" size={32} />
-			</div>
-		);
+		return <LoadingSpinner className="h-64" />;
 	}
 
 	return (

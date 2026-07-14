@@ -2,18 +2,19 @@ import { db } from './firebase';
 import { collection, query, where, getDocs, doc, writeBatch } from 'firebase/firestore';
 // CRITICAL FIX: Imported the missing systemService
 import { systemService } from './systemService';
+import { mapSnapshot } from './firestoreUtils';
 
 export const evaluationService = {
   getAllEvaluations: async () => {
     const evalRef = collection(db, 'evaluations');
     const snapshot = await getDocs(evalRef);
-    return snapshot.docs.map((document) => ({ id: document.id, ...document.data() }));
+    return mapSnapshot(snapshot);
   },
 
   getEligibleSubjectsForStudent: async (studentId) => {
     // 1. Fetch all subjects
     const subjectsSnap = await getDocs(collection(db, 'new_subjects'));
-    const allSubjects = subjectsSnap.docs.map((document) => ({ id: document.id, ...document.data() }));
+    const allSubjects = mapSnapshot(subjectsSnap);
 
     // 2. Fetch student's evaluation history
     const evalsSnap = await getDocs(query(collection(db, 'evaluations'), where('studentId', '==', studentId)));
