@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { BookOpen, CheckCircle2, Clock, Award, Loader2 } from 'lucide-react';
 import { studentService } from '../../../services/studentService';
 import { useAuth } from '../../../context/AuthContext';
+import { ErrorState } from '../../../components/ui/ErrorState';
 
 export default function StudentDashboardTab() {
   const { user, profile } = useAuth();
@@ -9,6 +10,8 @@ export default function StudentDashboardTab() {
   const [currentSubjects, setCurrentSubjects] = useState([]);
   const [completedHistory, setCompletedHistory] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     const fetchStudentData = async () => {
@@ -16,20 +19,22 @@ export default function StudentDashboardTab() {
 
       try {
         setLoading(true);
+        setError(null);
         const { currentSubjects: active, completedHistory: history } =
           await studentService.getAcademicRecords(user.uid);
 
         setCurrentSubjects(active);
         setCompletedHistory(history);
-      } catch (error) {
-        console.error('Failed to load student data', error);
+      } catch (err) {
+        console.error('Failed to load student data', err);
+        setError('We could not load your academic overview. Please try again.');
       } finally {
         setLoading(false);
       }
     };
 
     fetchStudentData();
-  }, [user]);
+  }, [user, reloadKey]);
 
   if (loading) {
     return (
@@ -37,6 +42,10 @@ export default function StudentDashboardTab() {
         <Loader2 className="animate-spin text-[#375534]" size={32} />
       </div>
     );
+  }
+
+  if (error) {
+    return <ErrorState message={error} onRetry={() => setReloadKey((key) => key + 1)} />;
   }
 
   const totalEarnedUnits = completedHistory.length * 3;

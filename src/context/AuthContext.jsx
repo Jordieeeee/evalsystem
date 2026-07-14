@@ -14,11 +14,14 @@ export const AuthProvider = ({ children }) => {
   const [profile, setProfile] = useState(null);
 
   const signOut = async () => {
-    await firebaseSignOut();
-    setUser(null);
-    setRole(null);
-    setProfile(null);
-    setAuthError(null);
+    try {
+      await firebaseSignOut();
+    } finally {
+      setUser(null);
+      setRole(null);
+      setProfile(null);
+      setAuthError(null);
+    }
   };
 
   const clearAuthError = () => {
@@ -27,40 +30,49 @@ export const AuthProvider = ({ children }) => {
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-      if (firebaseUser) {
-        setUser(firebaseUser);
-        const userRole = await getUserRole(firebaseUser.uid);
-        if (userRole) {
-          setRole(userRole);
-          if (userRole === 'student') {
-            const studentProfile = await studentService.getProfile(firebaseUser.uid);
-            if (!studentProfile) {
-              await studentService.createStudentProfile(firebaseUser.uid, {
-                name: firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'Student',
-                email: firebaseUser.email || '',
-                studentId: firebaseUser.uid,
-                course: 'BSIT',
-                year: '1',
-                status: 'active'
-              });
+      try {
+        if (firebaseUser) {
+          setUser(firebaseUser);
+          const userRole = await getUserRole(firebaseUser.uid);
+          if (userRole) {
+            setRole(userRole);
+            if (userRole === 'student') {
+              let studentProfile = await studentService.getProfile(firebaseUser.uid);
+              if (!studentProfile) {
+                await studentService.createStudentProfile(firebaseUser.uid, {
+                  name: firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'Student',
+                  email: firebaseUser.email || '',
+                  studentId: firebaseUser.uid,
+                  course: 'BSIT',
+                  year: '1',
+                  status: 'active'
+                });
+                studentProfile = await studentService.getProfile(firebaseUser.uid);
+              }
+              setProfile(studentProfile);
             }
-            setProfile(await studentService.getProfile(firebaseUser.uid));
+            setAuthError(null);
+          } else {
+            await firebaseSignOut();
+            setUser(null);
+            setRole(null);
+            setProfile(null);
+            setAuthError('Account not recognized. Contact your administrator.');
           }
-          setAuthError(null);
         } else {
-          await firebaseSignOut();
           setUser(null);
           setRole(null);
           setProfile(null);
-          setAuthError('Account not recognized. Contact your administrator.');
+          setAuthError(null);
         }
-      } else {
-        setUser(null);
+      } catch (error) {
+        console.error('Failed to resolve authentication state:', error);
         setRole(null);
         setProfile(null);
-        setAuthError(null);
+        setAuthError('We could not verify your account right now. Please try signing in again.');
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     });
 
     return () => unsubscribe();

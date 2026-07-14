@@ -2,18 +2,22 @@ import { useEffect, useState } from 'react';
 import { Search, Filter, Loader2 } from 'lucide-react';
 import { useAuth } from '../../../context/AuthContext';
 import { studentService } from '../../../services/studentService';
+import { ErrorState } from '../../../components/ui/ErrorState';
 
 export default function StudentAssignedSubjectsPage() {
   const { user } = useAuth();
   const [subjects, setSubjects] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     const fetchRecords = async () => {
       if (!user?.uid) return;
       try {
         setLoading(true);
+        setError(null);
         const { currentSubjects } = await studentService.getAcademicRecords(user.uid);
         setSubjects(currentSubjects.map((record) => ({
           code: record.subjectCode,
@@ -22,15 +26,16 @@ export default function StudentAssignedSubjectsPage() {
           units: 3,
           status: record.status
         })));
-      } catch (error) {
-        console.error('Failed to load assigned subjects', error);
+      } catch (err) {
+        console.error('Failed to load assigned subjects', err);
+        setError('We could not load your assigned subjects. Please try again.');
       } finally {
         setLoading(false);
       }
     };
 
     fetchRecords();
-  }, [user]);
+  }, [user, reloadKey]);
 
   const filteredSubjects = subjects.filter((subject) =>
     subject.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -44,6 +49,10 @@ export default function StudentAssignedSubjectsPage() {
         <Loader2 className="animate-spin text-[#375534]" size={32} />
       </div>
     );
+  }
+
+  if (error) {
+    return <ErrorState message={error} onRetry={() => setReloadKey((key) => key + 1)} />;
   }
 
   return (

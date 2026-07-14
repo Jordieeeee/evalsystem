@@ -11,17 +11,21 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../../../context/AuthContext';
 import { studentService } from '../../../services/studentService';
+import { ErrorState } from '../../../components/ui/ErrorState';
 
 export default function StudentProfilePage() {
   const { user } = useAuth();
   const [studentInfo, setStudentInfo] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     const fetchProfile = async () => {
       if (!user?.uid) return;
       try {
         setLoading(true);
+        setError(null);
         const profile = await studentService.getProfile(user.uid);
         if (profile) {
           setStudentInfo({
@@ -57,15 +61,20 @@ export default function StudentProfilePage() {
             requiredUnits: 180
           });
         }
-      } catch (error) {
-        console.error('Failed to load student profile', error);
+      } catch (err) {
+        console.error('Failed to load student profile', err);
+        setError('We could not load your profile. Please try again.');
       } finally {
         setLoading(false);
       }
     };
 
     fetchProfile();
-  }, [user]);
+  }, [user, reloadKey]);
+
+  if (error) {
+    return <ErrorState message={error} onRetry={() => setReloadKey((key) => key + 1)} />;
+  }
 
   if (loading || !studentInfo) {
     return (

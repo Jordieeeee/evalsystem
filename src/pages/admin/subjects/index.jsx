@@ -13,10 +13,13 @@ import {
 	Pencil,
 } from "lucide-react";
 import { subjectService } from "../../../services/subjectService";
+import { ErrorState } from "../../../components/ui/ErrorState";
 
 export default function AdminSubjectsPage() {
 	const [subjects, setSubjects] = useState([]);
 	const [loading, setLoading] = useState(true);
+	const [error, setError] = useState(null);
+	const [reloadKey, setReloadKey] = useState(0);
 	const [searchQuery, setSearchQuery] = useState("");
 
 	// Modal states
@@ -44,23 +47,20 @@ export default function AdminSubjectsPage() {
 	useEffect(() => {
 		const loadSubjects = async () => {
 			try {
+				setLoading(true);
+				setError(null);
 				const liveSubjects = await subjectService.getAllSubjects();
-				console.log("=== FIRESTORE FETCH DEBUG ===");
-				console.log("Fetched subjects:", liveSubjects);
-				console.log("Subject count:", liveSubjects.length);
-				console.log("Subject details:", JSON.stringify(liveSubjects, null, 2));
 				setSubjects(liveSubjects);
-			} catch (error) {
-				console.error("=== FIRESTORE FETCH ERROR ===");
-				console.error("Failed to fetch subjects:", error);
-				console.error("Error details:", JSON.stringify(error, null, 2));
+			} catch (err) {
+				console.error("Failed to fetch subjects:", err);
 				setSubjects([]);
+				setError("We could not load the subjects catalog. Please try again.");
 			} finally {
 				setLoading(false);
 			}
 		};
 		loadSubjects();
-	}, []);
+	}, [reloadKey]);
 
 	// Close dropdown when clicking outside
 	useEffect(() => {
@@ -168,20 +168,16 @@ export default function AdminSubjectsPage() {
 			!(!sub.courseTitle && !sub.id) // Filter out invalid subjects
 	);
 
-	// Debug filtering
-	console.log("=== FILTERING DEBUG ===");
-	console.log("Total subjects:", subjects.length);
-	console.log("Search query:", searchQuery);
-	console.log("Filtered subjects:", filteredSubjects.length);
-	console.log("All subjects:", subjects);
-	console.log("Filtered subjects:", filteredSubjects);
-
 	if (loading) {
 		return (
 			<div className="flex justify-center items-center h-64 text-[#375534]">
 				<Loader2 className="animate-spin" size={32} />
 			</div>
 		);
+	}
+
+	if (error) {
+		return <ErrorState message={error} onRetry={() => setReloadKey((key) => key + 1)} />;
 	}
 
 	return (
@@ -446,13 +442,8 @@ export default function AdminSubjectsPage() {
 											autoFocus
 										/>
 										{(() => {
-											console.log("Dropdown subjects:", subjects);
 											const availableSubjects = subjects.filter(
 												(s) => s.id !== formData.id,
-											);
-											console.log(
-												"Available subjects (excluding self):",
-												availableSubjects,
 											);
 											const filtered = availableSubjects.filter(
 												(s) =>
@@ -463,7 +454,6 @@ export default function AdminSubjectsPage() {
 														.toLowerCase()
 														.includes(prereqSearch.toLowerCase()),
 											);
-											console.log("Filtered subjects:", filtered);
 
 											if (availableSubjects.length === 0) {
 												return (

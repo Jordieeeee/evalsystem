@@ -2,15 +2,18 @@ import { useCallback, useEffect, useState } from 'react';
 import { Search, Plus, X, CheckCircle2, Loader2, Printer, FileText } from 'lucide-react';
 import { evaluationService } from '../../../services/evaluationService';
 import { studentService } from '../../../services/studentService';
+import { ErrorState } from '../../../components/ui/ErrorState';
 
 export default function AdminEvaluationPage() {
   const [evaluations, setEvaluations] = useState([]);
   const [students, setStudents] = useState([]);
   
   const [isPageLoading, setIsPageLoading] = useState(true);
+  const [pageError, setPageError] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isCheckingEligibility, setIsCheckingEligibility] = useState(false);
+  const [eligibilityError, setEligibilityError] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
 
   // Modal States
@@ -27,6 +30,7 @@ export default function AdminEvaluationPage() {
   const loadPageData = useCallback(async () => {
     try {
       setIsPageLoading(true);
+      setPageError(null);
       const [evalsData, studentsData] = await Promise.all([
         evaluationService.getAllEvaluations(),
         studentService.getAllStudents()
@@ -36,6 +40,7 @@ export default function AdminEvaluationPage() {
       setStudents(studentsData);
     } catch (error) {
       console.error("Failed to load data:", error);
+      setPageError('We could not load the evaluation registry. Please try again.');
     } finally {
       setIsPageLoading(false);
     }
@@ -61,6 +66,7 @@ export default function AdminEvaluationPage() {
     let cancelled = false;
     const runPreEvaluation = async () => {
       setIsCheckingEligibility(true);
+      setEligibilityError(null);
       try {
         const data = await evaluationService.getEligibleSubjectsForStudent(selectedStudentId);
         if (!cancelled) {
@@ -69,6 +75,10 @@ export default function AdminEvaluationPage() {
         }
       } catch (error) {
         console.error("Eligibility check failed:", error);
+        if (!cancelled) {
+          setEligibilityData({ passed: [], eligible: [] });
+          setEligibilityError('Unable to analyze this student\u2019s academic history. Please try selecting the student again.');
+        }
       } finally {
         if (!cancelled) {
           setIsCheckingEligibility(false);
@@ -183,6 +193,10 @@ export default function AdminEvaluationPage() {
         <p className="text-xs font-bold uppercase tracking-widest text-slate-400">Loading Registry...</p>
       </div>
     );
+  }
+
+  if (pageError) {
+    return <ErrorState message={pageError} onRetry={() => { void loadPageData(); }} />;
   }
 
   return (
@@ -342,6 +356,10 @@ export default function AdminEvaluationPage() {
                         <div className="p-8 text-center text-slate-400 font-bold flex flex-col items-center gap-3">
                           <Loader2 className="animate-spin text-[#375534]" size={24} />
                           Analyzing Academic History...
+                        </div>
+                      ) : eligibilityError ? (
+                        <div className="p-4 bg-rose-50 border border-rose-200 text-rose-700 rounded-2xl text-sm font-bold">
+                          {eligibilityError}
                         </div>
                       ) : (
                         <div className="bg-white border border-emerald-100 rounded-2xl overflow-hidden shadow-sm">

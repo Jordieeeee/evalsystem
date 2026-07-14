@@ -34,6 +34,7 @@ const LoginPage = () => {
       await signIn(email, password);
       // After successful sign-in, AuthContext will handle role fetching and redirect
     } catch (err) {
+      console.error('Sign-in failed:', err);
       setError('Failed to sign in. Please check your email and password.');
       setLoading(false);
     }
