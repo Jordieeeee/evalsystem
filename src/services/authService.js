@@ -8,7 +8,14 @@ export const signIn = async (email, password) => {
 };
 
 export const signOut = async () => {
-  await firebaseSignOut(auth);
+  console.log('Starting sign out process...');
+  try {
+    await firebaseSignOut(auth);
+    console.log('Firebase sign out successful');
+  } catch (error) {
+    console.error('Sign out failed:', error);
+    throw error;
+  }
 };
 
 export const getUserRole = async (uid) => {

@@ -156,7 +156,7 @@ const LandingPage = () => {
               <img
                 src={logoImg}
                 alt="The Last Salle University Crest"
-                className="h-22 w-22 object-contain"
+                className="h-18 w-18 object-contain"
               />
               <div className="flex flex-col text-left">
                 <span className="font-serif text-lg md:text-xl font-bold tracking-tight text-white leading-tight">

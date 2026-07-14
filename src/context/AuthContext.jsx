@@ -29,7 +29,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+    const authUnsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       try {
         if (firebaseUser) {
           setUser(firebaseUser);
@@ -75,7 +75,9 @@ export const AuthProvider = ({ children }) => {
       }
     });
 
-    return () => unsubscribe();
+    return () => {
+      authUnsubscribe();
+    };
   }, []);
 
   return (

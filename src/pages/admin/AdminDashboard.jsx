@@ -1,5 +1,5 @@
 import { useAuth } from '../../context/AuthContext.jsx';
-import { Link, Outlet, useLocation } from 'react-router-dom';
+import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useState } from 'react';
 import {
   LayoutDashboard,
@@ -18,6 +18,7 @@ import universitySeal from '../../assets/logo/logo.png';
 const AdminDashboard = () => {
   const { signOut } = useAuth();
   const location = useLocation();
+  const navigate = useNavigate();
   const [showLogoutModal, setShowLogoutModal] = useState(false);
 
   const handleSignOut = async () => {
@@ -27,6 +28,7 @@ const AdminDashboard = () => {
   const confirmLogout = async () => {
     setShowLogoutModal(false);
     await signOut();
+    navigate('/login');
   };
 
   const cancelLogout = () => {
@@ -49,7 +51,7 @@ const AdminDashboard = () => {
       <header className="h-16 bg-white border-b border-slate-100 sticky top-0 z-40 px-6 flex items-center justify-between shadow-xs">
         {/* Logo and Brand Title Identity */}
         <div className="flex items-center gap-3">
-          <div className="w-18 h-18 flex items-center justify-center overflow-hidden">
+          <div className="w-15 h-15 flex items-center justify-center overflow-hidden">
             <img
               src={universitySeal}
               alt="The Last Salle University Logo"
