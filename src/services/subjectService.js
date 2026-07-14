@@ -1,5 +1,6 @@
 import { db } from './firebase';
 import { collection, getDocs, doc, getDoc, setDoc, deleteDoc } from 'firebase/firestore';
+import { mapSnapshot, docToData } from './firestoreUtils';
 
 export const subjectService = {
   // Fetch all new curriculum subjects
@@ -10,7 +11,7 @@ export const subjectService = {
     console.log("Snapshot size:", snapshot.size);
     console.log("Snapshot docs:", snapshot.docs);
     console.log("Snapshot empty:", snapshot.empty);
-    const subjects = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    const subjects = mapSnapshot(snapshot);
     console.log("Mapped subjects:", subjects);
     return subjects;
   },
@@ -19,7 +20,7 @@ export const subjectService = {
   getSubject: async (courseCode) => {
     const docRef = doc(db, 'new_subjects', courseCode);
     const snap = await getDoc(docRef);
-    return snap.exists() ? { id: snap.id, ...snap.data() } : null;
+    return docToData(snap);
   },
 
   // Fetch the crosswalk mapping dictionary (Translates Old Code -> New Code)

@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
-import { Printer, Download, Loader2 } from 'lucide-react';
+import { Printer, Download } from 'lucide-react';
 import universitySeal from '../../../assets/logo/logo.png';
 import { useAuth } from '../../../context/AuthContext';
 import { studentService } from '../../../services/studentService';
+import { LoadingSpinner } from '../../../components/ui/LoadingSpinner';
 
 export default function StudentReportsPage() {
   const { user, profile } = useAuth();
@@ -58,11 +59,7 @@ export default function StudentReportsPage() {
   };
 
   if (loading) {
-    return (
-      <div className="flex justify-center items-center h-[50vh]">
-        <Loader2 className="animate-spin text-[#375534]" size={32} />
-      </div>
-    );
+    return <LoadingSpinner />;
   }
 
   return (

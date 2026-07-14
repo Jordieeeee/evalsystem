@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
 import { 
-   Printer, CheckCircle2, Loader2
+   Printer, CheckCircle2
 } from 'lucide-react';
 import { studentService } from '../../../services/studentService';
 import { evaluationService } from '../../../services/evaluationService';
+import { LoadingSpinner } from '../../../components/ui/LoadingSpinner';
 
 export default function AdminReportsPage() {
   const [loading, setLoading] = useState(true);
@@ -127,11 +128,7 @@ export default function AdminReportsPage() {
   const triggerPrint = () => window.print();
 
   if (loading) {
-    return (
-      <div className="flex justify-center items-center h-[70vh] text-[#375534]">
-        <Loader2 className="animate-spin" size={36} />
-      </div>
-    );
+    return <LoadingSpinner size={36} className="h-[70vh]" />;
   }
 
   return (

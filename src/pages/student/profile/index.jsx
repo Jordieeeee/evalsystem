@@ -6,10 +6,10 @@ import {
   Mail,
   Phone,
   MapPin,
-  GraduationCap,
-  Loader2
+  GraduationCap
 } from 'lucide-react';
 import { useAuth } from '../../../context/AuthContext';
+import { LoadingSpinner } from '../../../components/ui/LoadingSpinner';
 import { studentService } from '../../../services/studentService';
 
 export default function StudentProfilePage() {
@@ -68,11 +68,7 @@ export default function StudentProfilePage() {
   }, [user]);
 
   if (loading || !studentInfo) {
-    return (
-      <div className="flex justify-center items-center h-[50vh]">
-        <Loader2 className="animate-spin text-[#375534]" size={32} />
-      </div>
-    );
+    return <LoadingSpinner />;
   }
 
   return (

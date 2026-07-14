@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react';
-import { Download, Award, FileText, Loader2 } from 'lucide-react';
+import { Download, Award, FileText } from 'lucide-react';
 import { useAuth } from '../../../context/AuthContext';
 import { studentService } from '../../../services/studentService';
+import { formatDate } from '../../../utils/format';
+import { LoadingSpinner } from '../../../components/ui/LoadingSpinner';
 
 export default function StudentEvaluationResultsPage() {
   const { user } = useAuth();
@@ -21,7 +23,7 @@ export default function StudentEvaluationResultsPage() {
           totalCredits: completedHistory.length * 3
         });
         setEvaluations(completedHistory.map((record) => ({
-          date: record.assignedDate ? new Date(record.assignedDate).toLocaleDateString() : 'N/A',
+          date: formatDate(record.assignedDate),
           subject: record.subjectCode,
           grade: record.grade || '-',
           remarks: record.remarks || 'Recorded from evaluation',
@@ -38,11 +40,7 @@ export default function StudentEvaluationResultsPage() {
   }, [user]);
 
   if (loading) {
-    return (
-      <div className="flex justify-center items-center h-[50vh]">
-        <Loader2 className="animate-spin text-[#375534]" size={32} />
-      </div>
-    );
+    return <LoadingSpinner />;
   }
 
   return (
