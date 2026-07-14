@@ -24,14 +24,29 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    match /new_subjects/{subjectId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    match /curriculum_mappings/{mappingId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    match /system_settings/{settingId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
     match /evaluations/{evaluationId} {
       allow read: if isSignedIn();
-      allow write: if isAdmin() || request.resource.data.studentId == request.auth.uid;
+      allow write: if isAdmin();
     }
 
     match /studentSubjects/{assignmentId} {
       allow read: if isSignedIn();
-      allow write: if isAdmin() || request.resource.data.studentId == request.auth.uid;
+      allow write: if isAdmin();
     }
   }
 }
