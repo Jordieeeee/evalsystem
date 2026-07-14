@@ -4,14 +4,20 @@ import { collection, getDocs, doc, getDoc, setDoc, deleteDoc } from 'firebase/fi
 export const subjectService = {
   // Fetch all new curriculum subjects
   getAllSubjects: async () => {
-    const subjectsRef = collection(db, 'subjects');
+    const subjectsRef = collection(db, 'new_subjects');
     const snapshot = await getDocs(subjectsRef);
-    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    console.log("=== FIRESTORE SNAPSHOT DEBUG ===");
+    console.log("Snapshot size:", snapshot.size);
+    console.log("Snapshot docs:", snapshot.docs);
+    console.log("Snapshot empty:", snapshot.empty);
+    const subjects = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    console.log("Mapped subjects:", subjects);
+    return subjects;
   },
 
   // Fetch a single subject's details
   getSubject: async (courseCode) => {
-    const docRef = doc(db, 'subjects', courseCode);
+    const docRef = doc(db, 'new_subjects', courseCode);
     const snap = await getDoc(docRef);
     return snap.exists() ? { id: snap.id, ...snap.data() } : null;
   },
@@ -34,14 +40,14 @@ export const subjectService = {
   // Add a new subject to Firestore
   addSubject: async (subjectData) => {
     const { id, ...data } = subjectData;
-    const docRef = doc(db, 'subjects', id.toUpperCase());
+    const docRef = doc(db, 'new_subjects', id.toUpperCase());
     await setDoc(docRef, data);
     return { id: id.toUpperCase(), ...data };
   },
 
   deleteSubject: async (subjectId) => {
     try {
-      const docRef = doc(db, 'subjects', subjectId);
+      const docRef = doc(db, 'new_subjects', subjectId);
       await deleteDoc(docRef);
       return true;
     } catch (error) {

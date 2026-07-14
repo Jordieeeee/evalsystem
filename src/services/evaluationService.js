@@ -1,7 +1,7 @@
 import { db } from './firebase';
 import { collection, query, where, getDocs, doc, writeBatch } from 'firebase/firestore';
 // CRITICAL FIX: Imported the missing systemService
-import { systemService } from './systemService'; 
+import { systemService } from './systemService';
 
 export const evaluationService = {
   getAllEvaluations: async () => {
@@ -12,7 +12,7 @@ export const evaluationService = {
 
   getEligibleSubjectsForStudent: async (studentId) => {
     // 1. Fetch all subjects
-    const subjectsSnap = await getDocs(collection(db, 'subjects'));
+    const subjectsSnap = await getDocs(collection(db, 'new_subjects'));
     const allSubjects = subjectsSnap.docs.map((document) => ({ id: document.id, ...document.data() }));
 
     // 2. Fetch student's evaluation history
@@ -44,7 +44,7 @@ export const evaluationService = {
           if (!subject.semesterOffered.includes(activeSemester)) {
             return false;
           }
-        } 
+        }
         // Handle if database stored it as a raw String (e.g., "1st Semester")
         else if (typeof subject.semesterOffered === 'string' && subject.semesterOffered.trim() !== '') {
           if (subject.semesterOffered !== activeSemester) {
@@ -56,7 +56,7 @@ export const evaluationService = {
       // Rule C: Check Prerequisites
       const reqs = subject.prerequisites || [];
       const missing = reqs.filter((req) => !passedCodes.includes(req));
-      
+
       // If there are no missing prerequisites, it is eligible
       return missing.length === 0;
     });
