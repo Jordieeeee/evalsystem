@@ -84,7 +84,7 @@ const LandingPage = () => {
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
         </svg>
       ),
-      value: '45+',
+      value: '1',
       label: 'Degree Programs',
     },
     {
@@ -93,7 +93,7 @@ const LandingPage = () => {
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
         </svg>
       ),
-      value: '620+',
+      value: '10',
       label: 'Distinguished Faculty',
     },
     {
@@ -102,7 +102,7 @@ const LandingPage = () => {
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
         </svg>
       ),
-      value: '180+',
+      value: '5',
       label: 'Student Organizations',
     },
   ];
@@ -271,7 +271,7 @@ const LandingPage = () => {
                   <span className="text-[11px] font-bold text-forest-700 uppercase tracking-widest block mb-3">
                     SYSTEM CORE GATEWAY
                   </span>
-                  <h1 className="font-serif text-4xl md:text-5xl lg:text-6xl font-extrabold text-forest-950 tracking-tight leading-[1.1] mb-6">
+                  <h1 className="font-serif text-4xl md:text-5xl lg:text-6xl font-extrabold text-forest-900 tracking-tight leading-[1.1] mb-6">
                     Evaluating Today's Campus,<br />
                     Shaping Tomorrow's Leaders
                   </h1>
@@ -297,7 +297,7 @@ const LandingPage = () => {
                   <span className="text-[11px] font-bold text-forest-700 uppercase tracking-widest block mb-3">
                     SYSTEM FOCUS
                   </span>
-                  <h2 className="font-serif text-3xl md:text-4xl font-bold text-forest-950 tracking-tight mb-4">
+                  <h2 className="font-serif text-3xl md:text-4xl font-bold text-forest-910 tracking-tight mb-4">
                     Fostering Quality Through Honest Feedback
                   </h2>
                   <p className="text-sm md:text-base text-forest-700/80 leading-relaxed">
@@ -332,7 +332,7 @@ const LandingPage = () => {
                         </svg>
                       </div>
                       <div>
-                        <h3 className="text-base font-bold text-forest-950">{title}</h3>
+                        <h3 className="text-base font-bold text-forest-910">{title}</h3>
                         <p className="text-sm text-forest-700/80 mt-1">{desc}</p>
                       </div>
                     </div>
@@ -662,7 +662,7 @@ const LandingPage = () => {
                     },
                     {
                       label: 'Campus Address',
-                      value: '1 University Drive, Last Salle City, Metro — 1234',
+                      value: 'G. Leviste St., Poblacion, Malvar, Batangas, Philippines 4233',
                       href: null,
                       icon: 'M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z M15 11a3 3 0 11-6 0 3 3 0 016 0z',
                     },
