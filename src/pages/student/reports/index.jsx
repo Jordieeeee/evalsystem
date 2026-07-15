@@ -81,7 +81,7 @@ export default function StudentReportsPage() {
           >
             <Printer size={14} /> Print
           </button>
-          <button className="flex items-center justify-center gap-2 bg-[#0F2A1D] text-[#E3EED4] text-xs font-black uppercase tracking-wider px-5 py-2.5 rounded-xl hover:bg-[#375534] transition-all shadow-sm active:scale-[0.98] flex-1 sm:flex-none">
+          <button className="flex items-center justify-center gap-2 bg-[#7D1924] text-[#FCEEEF] text-xs font-black uppercase tracking-wider px-5 py-2.5 rounded-xl hover:bg-[#375534] transition-all shadow-sm active:scale-[0.98] flex-1 sm:flex-none">
             <Download size={14} /> Export PDF
           </button>
         </div>
@@ -112,7 +112,7 @@ export default function StudentReportsPage() {
               className="w-full h-full object-contain brightness-105 contrast-105"
               onError={(e) => {
                 e.target.style.display = 'none';
-                e.target.parentNode.innerHTML = `<div class="text-center font-serif font-black text-[11px] text-[#0F2A1D] leading-tight">TLSU<br/><span class="text-[8px] tracking-tighter text-slate-400">MALVAR</span></div>`;
+                e.target.parentNode.innerHTML = `<div class="text-center font-serif font-black text-[11px] text-[#7D1924] leading-tight">TLSU<br/><span class="text-[8px] tracking-tighter text-slate-400">MALVAR</span></div>`;
               }}
             />
           </div>
@@ -154,7 +154,7 @@ export default function StudentReportsPage() {
         {/* Tabular Evaluation Results Sheet Matrix */}
         <div className="py-6 space-y-4">
           <div className="flex items-center gap-2 text-sm font-serif font-black text-slate-900">
-            <div className="w-1 h-4 bg-[#0F2A1D] rounded-full" />
+            <div className="w-1 h-4 bg-[#7D1924] rounded-full" />
             <h4>Evaluation Results</h4>
           </div>
 
@@ -186,10 +186,10 @@ export default function StudentReportsPage() {
 
           {/* Cumulative General Weighted Average Row Banner */}
           <div className="bg-[#eaf0eb] border border-[#cbe6bf]/50 rounded-2xl p-4 flex justify-between items-center px-6">
-            <span className="text-[11px] font-black uppercase tracking-wider text-[#0F2A1D]">
+            <span className="text-[11px] font-black uppercase tracking-wider text-[#7D1924]">
               General Weighted Average (GWA)
             </span>
-            <span className="text-2xl font-serif font-black text-[#0F2A1D] tracking-tight">
+            <span className="text-2xl font-serif font-black text-[#7D1924] tracking-tight">
               {reportMetadata.gwa}
             </span>
           </div>

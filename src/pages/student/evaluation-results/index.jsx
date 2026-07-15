@@ -46,7 +46,7 @@ export default function StudentEvaluationResultsPage() {
   }
 
   return (
-    <div className="space-y-6 text-[#0F2A1D]">
+    <div className="space-y-6 text-[#7D1924]">
       
       {/* Page Title & Download Transcript Action Header Row */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
@@ -65,12 +65,12 @@ export default function StudentEvaluationResultsPage() {
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         
         {/* Cumulative GPA Highlights Card */}
-        <div className="bg-[#0F2A1D] text-[#E3EED4] rounded-3xl p-6 shadow-sm border border-white/5 flex items-center gap-5">
+        <div className="bg-[#7D1924] text-[#FCEEEF] rounded-3xl p-6 shadow-sm border border-white/5 flex items-center gap-5">
           <div className="p-4 bg-white/10 rounded-2xl text-white">
             <Award size={24} />
           </div>
           <div>
-            <p className="text-xs font-bold text-[#AEC3B0] uppercase tracking-wider">Cumulative GPA</p>
+            <p className="text-xs font-bold text-[#FCEEEF] uppercase tracking-wider">Cumulative GPA</p>
             <p className="text-4xl font-serif font-black text-white mt-1 tracking-tight">{metrics.cumulativeGpa}</p>
           </div>
         </div>
@@ -112,7 +112,7 @@ export default function StudentEvaluationResultsPage() {
                     <span className={`px-3 py-1 rounded-md text-[9px] font-black uppercase tracking-wider border inline-block min-w-[85px] text-center
                       ${item.status === 'Excellent' 
                         ? 'bg-amber-50 text-amber-700 border-amber-200/60' 
-                        : item.status === 'Passed' ? 'bg-[#e2f4df] text-[#0F2A1D] border-[#cbe6bf]'
+                        : item.status === 'Passed' ? 'bg-[#801818] text-[#7D1924] border-[#cbe6bf]'
                         : 'bg-slate-50 text-slate-500 border-slate-200'
                       }`}
                     >

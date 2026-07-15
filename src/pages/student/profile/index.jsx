@@ -113,7 +113,7 @@ export default function StudentProfilePage() {
                 <p className="text-xs font-mono font-bold text-slate-400 mt-1">{studentInfo.studentId || studentInfo.id}</p>
               </div>
               <div className="pt-1">
-                <span className="bg-[#e2f4df] text-[#0F2A1D] px-4 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-wider border border-[#cbe6bf]/30">
+                <span className="bg-[#801818] text-[#FCEEEF] px-4 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-wider border border-[#cbe6bf]/30">
                   {studentInfo.classification || 'REGULAR'}
                 </span>
               </div>
@@ -202,7 +202,7 @@ export default function StudentProfilePage() {
 
           {/* Degree Completion Horizontal Tracking Linear Gauge Banner */}
           <div className="bg-[#eaf0eb] border border-[#cbe6bf]/40 rounded-3xl p-6 shadow-2xs flex flex-col sm:flex-row items-start sm:items-center gap-4">
-            <div className="p-3.5 bg-white border border-slate-200/60 rounded-2xl text-[#0F2A1D] shrink-0">
+            <div className="p-3.5 bg-white border border-slate-200/60 rounded-2xl text-[#7D1924] shrink-0">
               <GraduationCap size={20} />
             </div>
             <div className="space-y-3 flex-1 w-full text-xs font-bold">
@@ -214,7 +214,7 @@ export default function StudentProfilePage() {
               <div className="space-y-2">
                 <div className="w-full bg-white/60 p-0.5 h-3 rounded-full overflow-hidden border border-slate-200/30">
                   <div 
-                    className="bg-[#0F2A1D] h-full rounded-full transition-all duration-500" 
+                    className="bg-[#7D1924] h-full rounded-full transition-all duration-500" 
                     style={{ width: `${studentInfo.completionPercentage || 0}%` }}
                   />
                 </div>

@@ -102,9 +102,9 @@ export default function AdminSettingsPage() {
   ];
 
   return (
-    <div className="space-y-6 text-[#0F2A1D]">
+    <div className="space-y-6 text-[#7D1924]">
       <div>
-        <h2 className="text-3xl font-extrabold tracking-tight text-[#0F2A1D]">Settings</h2>
+        <h2 className="text-3xl font-extrabold tracking-tight text-[#7D1924]">Settings</h2>
         <p className="text-xs text-slate-400 font-medium uppercase mt-1 tracking-wider">
           Configure system environment variables and preferences.
         </p>
@@ -120,8 +120,8 @@ export default function AdminSettingsPage() {
                 onClick={() => setActiveSubTab(item.name)}
                 className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-bold uppercase tracking-wider transition-all duration-200
                   ${isSubActive 
-                    ? 'bg-[#0F2A1D] text-white shadow-md' 
-                    : 'text-slate-500 hover:bg-slate-100 hover:text-[#0F2A1D]'
+                    ? 'bg-[#7D1924] text-white shadow-md' 
+                    : 'text-slate-500 hover:bg-slate-100 hover:text-[#7D1924]'
                   }`}
               >
                 {item.icon}
@@ -184,7 +184,7 @@ export default function AdminSettingsPage() {
                     </div>
                     <button 
                       type="submit"
-                      className="flex items-center gap-2 bg-[#0F2A1D] text-[#E3EED4] text-xs font-black uppercase tracking-widest px-6 py-3.5 rounded-2xl hover:bg-[#375534] transition-all shadow-sm active:scale-[0.98]"
+                      className="flex items-center gap-2 bg-[#7D1924] text-[#FCEEEF] text-xs font-black uppercase tracking-widest px-6 py-3.5 rounded-2xl hover:bg-[#962230] transition-all shadow-sm active:scale-[0.98]"
                     >
                       <Save size={14} /> Save Changes
                     </button>
@@ -206,7 +206,7 @@ export default function AdminSettingsPage() {
                     <button 
                       onClick={() => handleToggle('compactTable')}
                       className={`w-11 h-6 rounded-full transition-colors duration-200 relative focus:outline-none shrink-0
-                        ${displaySettings.compactTable ? 'bg-[#0F2A1D]' : 'bg-slate-200'}`}
+                        ${displaySettings.compactTable ? 'bg-[#7D1924]' : 'bg-slate-200'}`}
                     >
                       <div className={`w-4 h-4 bg-white rounded-full absolute top-1 transition-transform duration-200
                         ${displaySettings.compactTable ? 'right-1' : 'left-1'}`} 
@@ -222,7 +222,7 @@ export default function AdminSettingsPage() {
                     <button 
                       onClick={() => handleToggle('showActivityFeed')}
                       className={`w-11 h-6 rounded-full transition-colors duration-200 relative focus:outline-none shrink-0
-                        ${displaySettings.showActivityFeed ? 'bg-[#0F2A1D]' : 'bg-slate-200'}`}
+                        ${displaySettings.showActivityFeed ? 'bg-[#7D1924]' : 'bg-slate-200'}`}
                     >
                       <div className={`w-4 h-4 bg-white rounded-full absolute top-1 transition-transform duration-200
                         ${displaySettings.showActivityFeed ? 'right-1' : 'left-1'}`} 
@@ -273,7 +273,7 @@ export default function AdminSettingsPage() {
                     <button 
                       type="submit"
                       disabled={isSavingAcademic}
-                      className="flex items-center justify-center gap-2 bg-[#0F2A1D] text-[#E3EED4] text-[11px] px-5 py-3 rounded-xl uppercase tracking-wider hover:bg-[#375534] transition-colors disabled:opacity-50"
+                      className="flex items-center justify-center gap-2 bg-[#7D1924] text-[#FCEEEF] text-[11px] px-5 py-3 rounded-xl uppercase tracking-wider hover:bg-[#962230] transition-colors disabled:opacity-50"
                     >
                       {isSavingAcademic ? <Loader2 size={14} className="animate-spin" /> : 'Save Academic Framework'}
                     </button>

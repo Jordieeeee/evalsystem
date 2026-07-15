@@ -56,12 +56,12 @@ const StudentDashboard = () => {
               className="w-full h-full object-contain"
               onError={(e) => {
                 e.target.style.display = 'none';
-                e.target.parentNode.innerHTML = `<div class="text-xs font-black text-[#0F2A1D]">TLSU</div>`;
+                e.target.parentNode.innerHTML = `<div class="text-xs font-black text-[#7D1924]">TLSU</div>`;
               }}
             />
           </div>
           <div className="leading-tight">
-            <h1 className="font-serif text-lg font-bold tracking-tight block leading-tight text-[#0F2A1D]">The Last Salle</h1>
+            <h1 className="font-serif text-lg font-bold tracking-tight block leading-tight text-[#7D1924]">The Last Salle</h1>
             <p className="font-serif text-lg font-bold tracking-tight block leading-tight text-slate-400 uppercase tracking-widest -mt-0.5">University</p>
           </div>
         </div>
@@ -100,7 +100,7 @@ const StudentDashboard = () => {
                   to={item.path}
                   className={`flex items-center gap-3.5 px-4 py-3 rounded-2xl text-xs font-bold tracking-wide transition-all duration-150
                     ${isActive
-                      ? 'bg-[#0F2A1D] text-white shadow-sm'
+                      ? 'bg-[#7D1924] text-white shadow-sm'
                       : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'
                     }`}
                 >
@@ -134,9 +134,9 @@ const StudentDashboard = () => {
         <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in-95 duration-200">
             {/* Modal Header */}
-            <div className="bg-[#0F2A1D] text-[#E3EED4] p-5 flex justify-between items-center">
+            <div className="bg-[#7D1924] text-[#FCEEEF] p-5 flex justify-between items-center">
               <h3 className="text-sm font-black uppercase tracking-wider">Confirm Logout</h3>
-              <button onClick={cancelLogout} className="text-[#AEC3B0] hover:text-white transition-colors">
+              <button onClick={cancelLogout} className="text-[#FCEEEF] hover:text-white transition-colors">
                 <X size={18} />
               </button>
             </div>

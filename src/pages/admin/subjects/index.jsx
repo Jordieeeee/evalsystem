@@ -221,7 +221,7 @@ export default function AdminSubjectsPage() {
 							setPrereqSearch("");
 							setIsModalOpen(true);
 						}}
-						className="flex items-center gap-2 bg-[#0F2A1D] text-[#E3EED4] text-xs font-bold uppercase tracking-wider px-5 py-2.5 rounded-xl hover:bg-[#375534] transition-all shadow-sm shrink-0"
+						className="flex items-center gap-2 bg-[#7D1924] text-[#FCEEEF] text-xs font-bold uppercase tracking-wider px-5 py-2.5 rounded-xl hover:bg-[#962230] transition-all shadow-sm shrink-0"
 					>
 						<Plus size={16} /> Add Subject
 					</button>
@@ -305,7 +305,7 @@ export default function AdminSubjectsPage() {
 			{isModalOpen && (
 				<div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4">
 					<div className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden max-h-[90vh] flex flex-col">
-						<div className="bg-[#0F2A1D] text-[#E3EED4] p-5 flex justify-between items-center shrink-0">
+						<div className="bg-[#7D1924] text-[#FCEEEF] p-5 flex justify-between items-center shrink-0">
 							<h3 className="text-sm font-black uppercase tracking-wider">
 								{formData.id ? "Edit Subject" : "Add New Subject"}
 							</h3>
@@ -520,7 +520,7 @@ export default function AdminSubjectsPage() {
 							<button
 								type="submit"
 								disabled={isSubmitting}
-								className="w-full bg-[#0F2A1D] text-[#E3EED4] py-3 rounded-xl hover:bg-[#375534] transition-all flex items-center justify-center"
+								className="w-full bg-[#7D1924] text-[#FCEEEF] py-3 rounded-xl hover:bg-[#962230] transition-all flex items-center justify-center"
 							>
 								{isSubmitting ? (
 									<Loader2 className="animate-spin" size={16} />

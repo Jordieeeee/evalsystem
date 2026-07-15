@@ -134,7 +134,7 @@ export default function AdminDashboardPage() {
       </div>
 
       {/* Formal Welcome Banner */}
-      <div className="bg-[#0F2A1D] text-[#E3EED4] rounded-3xl p-8 flex flex-col md:flex-row justify-between items-start md:items-center shadow-lg border border-white/10 relative overflow-hidden">
+      <div className="bg-[#7D1924] text-[#962230] rounded-3xl p-8 flex flex-col md:flex-row justify-between items-start md:items-center shadow-lg border border-white/10 relative overflow-hidden">
         <div className="space-y-1 z-10">
           <h2 className="text-3xl font-bold tracking-tight text-white">
             Welcome back, Administrator
@@ -147,8 +147,8 @@ export default function AdminDashboardPage() {
         <div className="mt-4 md:mt-0 bg-[#375534]/40 backdrop-blur-md p-4 rounded-2xl border border-white/10 text-left md:text-right z-10 min-w-[220px]">
           <p className="font-bold text-base text-white tracking-wide">{new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
           <div className="flex gap-2 mt-2 text-[10px] font-black tracking-wider justify-start md:justify-end uppercase">
-            <span className="bg-[#0F2A1D] text-[#E3EED4] px-2.5 py-1 rounded-lg border border-white/5">A.Y. {academicTerm.activeYear}</span>
-            <span className="bg-[#0F2A1D] text-[#E3EED4] px-2.5 py-1 rounded-lg border border-white/5">{academicTerm.activeSemester}</span>
+            <span className="bg-[#7D1924] text-[#FCEEEF] px-2.5 py-1 rounded-lg border border-white/5">A.Y. {academicTerm.activeYear}</span>
+            <span className="bg-[#7D1924] text-[#FCEEEF] px-2.5 py-1 rounded-lg border border-white/5">{academicTerm.activeSemester}</span>
           </div>
         </div>
       </div>
@@ -243,19 +243,19 @@ export default function AdminDashboardPage() {
         <div className="bg-white rounded-3xl p-6 border border-slate-200/80 shadow-sm space-y-4">
           <h3 className="text-xs font-black text-slate-900 uppercase tracking-wider">Quick Actions</h3>
           <div className="grid grid-cols-2 gap-3 text-center h-full">
-            <Link to="/admin/evaluation" className="p-4 bg-slate-50 hover:bg-[#E3EED4]/30 hover:border-[#6B9071]/40 border border-slate-200/60 rounded-2xl flex flex-col items-center justify-center gap-2 group transition-all">
+            <Link to="/admin/evaluation" className="p-4 bg-slate-50 hover:bg-[#FCEEEF]/30 hover:border-[#7A1C2C]/40 border border-slate-200/60 rounded-2xl flex flex-col items-center justify-center gap-2 group transition-all">
               <PlusCircle size={20} className="text-[#375534] group-hover:scale-105 transition-transform" />
               <span className="text-[10px] font-black text-slate-700 tracking-wide uppercase">Assign Subject</span>
             </Link>
-            <Link to="/admin/evaluation" className="p-4 bg-slate-50 hover:bg-[#E3EED4]/30 hover:border-[#6B9071]/40 border border-slate-200/60 rounded-2xl flex flex-col items-center justify-center gap-2 group transition-all">
+            <Link to="/admin/evaluation" className="p-4 bg-slate-50 hover:bg-[#FCEEEF]/30 hover:border-[#7A1C2C]/40 border border-slate-200/60 rounded-2xl flex flex-col items-center justify-center gap-2 group transition-all">
               <UserCheck size={20} className="text-amber-600 group-hover:scale-105 transition-transform" />
               <span className="text-[10px] font-black text-slate-700 tracking-wide uppercase">Evaluate Student</span>
             </Link>
-            <Link to="/admin/reports" className="p-4 bg-slate-50 hover:bg-[#E3EED4]/30 hover:border-[#6B9071]/40 border border-slate-200/60 rounded-2xl flex flex-col items-center justify-center gap-2 group transition-all">
+            <Link to="/admin/reports" className="p-4 bg-slate-50 hover:bg-[#FCEEEF]/30 hover:border-[#7A1C2C]/40 border border-slate-200/60 rounded-2xl flex flex-col items-center justify-center gap-2 group transition-all">
               <FileSpreadsheet size={20} className="text-blue-600 group-hover:scale-105 transition-transform" />
               <span className="text-[10px] font-black text-slate-700 tracking-wide uppercase">Generate Report</span>
             </Link>
-            <Link to="/admin/students" className="p-4 bg-slate-50 hover:bg-[#E3EED4]/30 hover:border-[#6B9071]/40 border border-slate-200/60 rounded-2xl flex flex-col items-center justify-center gap-2 group transition-all">
+            <Link to="/admin/students" className="p-4 bg-slate-50 hover:bg-[#FCEEEF]/30 hover:border-[#7A1C2C]/40 border border-slate-200/60 rounded-2xl flex flex-col items-center justify-center gap-2 group transition-all">
               <Users size={20} className="text-emerald-600 group-hover:scale-105 transition-transform" />
               <span className="text-[10px] font-black text-slate-700 tracking-wide uppercase">Manage Students</span>
             </Link>

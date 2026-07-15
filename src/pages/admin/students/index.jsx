@@ -235,7 +235,7 @@ export default function AdminStudentsPage() {
         </div>
         <button
           onClick={openAddModal}
-          className="flex items-center gap-2 bg-[#0F2A1D] text-[#E3EED4] text-xs font-bold uppercase tracking-wider px-5 py-3.5 rounded-2xl hover:bg-[#375534] transition-all shadow-sm active:scale-[0.98]"
+          className="flex items-center gap-2 bg-[#7D1924] text-[#FCEEEF] text-xs font-bold uppercase tracking-wider px-5 py-3.5 rounded-2xl hover:bg-[#962230] transition-all shadow-sm active:scale-[0.98]"
         >
           <UserPlus size={16} /> Add Student
         </button>
@@ -256,7 +256,7 @@ export default function AdminStudentsPage() {
           <button 
             onClick={() => setIsFilterOpen(!isFilterOpen)}
             className={`flex items-center justify-center gap-2 border text-slate-700 text-xs font-bold uppercase tracking-wider px-5 py-3 rounded-2xl transition-all
-              ${hasActiveFilters ? 'bg-[#0F2A1D] text-[#E3EED4] border-[#0F2A1D]' : 'bg-slate-50 border-slate-200 hover:bg-slate-100'}`}
+              ${hasActiveFilters ? 'bg-[#7D1924] text-[#FCEEEF] border-[#7D1924]' : 'bg-slate-50 border-slate-200 hover:bg-slate-100'}`}
           >
             <Filter size={16} /> Filter {hasActiveFilters && `(${Object.values(filters).filter(f => f !== 'all').length})`}
           </button>
@@ -267,7 +267,7 @@ export default function AdminStudentsPage() {
                 <h4 className="text-xs font-black uppercase tracking-wider text-slate-900">Filters</h4>
                 <button 
                   onClick={resetFilters}
-                  className="text-[10px] font-bold text-[#375534] hover:text-[#0F2A1D] uppercase tracking-wider"
+                  className="text-[10px] font-bold text-[#7D1924] hover:text-[#962230] uppercase tracking-wider"
                 >
                   Reset
                 </button>
@@ -364,7 +364,7 @@ export default function AdminStudentsPage() {
                       <div className="flex items-center justify-end gap-1.5 opacity-40 group-hover:opacity-100 transition-opacity">
                         <button
                           onClick={() => openEditModal(student)}
-                          className="p-2 text-slate-500 hover:text-[#0F2A1D] hover:bg-slate-100 rounded-xl transition-all"
+                          className="p-2 text-slate-500 hover:text-[#7D1924] hover:bg-slate-100 rounded-xl transition-all"
                         >
                           <Edit3 size={15} />
                         </button>
@@ -391,9 +391,9 @@ export default function AdminStudentsPage() {
       </div>
 
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 bg-[#0F2A1D]/40 backdrop-blur-sm flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-50 bg-[F5F5DC]/40 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in-95 duration-200">
-            <div className="bg-[#0F2A1D] text-[#E3EED4] p-5 flex justify-between items-center">
+            <div className="bg-[#7D1924] text-[#FCEEEF] p-5 flex justify-between items-center">
               <h3 className="text-sm font-black uppercase tracking-wider">
                 {editingStudent ? 'Edit Student Configuration' : 'Register New Student Profile'}
               </h3>
@@ -540,7 +540,7 @@ export default function AdminStudentsPage() {
                 <button
                   type="submit"
                   disabled={isSubmitting}
-                  className="bg-[#0F2A1D] text-[#E3EED4] px-5 py-2.5 rounded-xl hover:bg-[#375534] transition-all disabled:opacity-60"
+                  className="bg-[#7D1924] text-[#FCEEEF] px-5 py-2.5 rounded-xl hover:bg-[#962230] transition-all disabled:opacity-60"
                 >
                   {isSubmitting ? <Loader2 className="animate-spin" size={16} /> : (editingStudent ? 'Save Changes' : 'Register Entry')}
                 </button>

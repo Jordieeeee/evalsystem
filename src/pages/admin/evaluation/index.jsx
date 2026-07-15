@@ -213,7 +213,7 @@ export default function AdminEvaluationPage() {
               setSelectedStudentId('');
               setIsModalOpen(true);
             }}
-            className="bg-[#0F2A1D] text-[#E3EED4] px-5 py-2.5 rounded-xl flex items-center gap-2 hover:bg-[#375534] transition-all font-bold text-xs shadow-sm"
+            className="bg-[#7D1924] text-[#FCEEEF] px-5 py-2.5 rounded-xl flex items-center gap-2 hover:bg-[#962230] transition-all font-bold text-xs shadow-sm"
           >
             <Plus size={16} className="stroke-[2.5]" /> Run Pre-Evaluation
           </button>
@@ -466,7 +466,7 @@ export default function AdminEvaluationPage() {
                         <button
                           type="submit"
                           disabled={manualTorSubmitting}
-                          className="bg-[#0F2A1D] text-[#E3EED4] px-5 py-2.5 rounded-xl hover:bg-[#375534] transition-all font-bold text-xs shadow-sm disabled:opacity-50"
+                          className="bg-[#7D1924] text-[#FCEEEF] px-5 py-2.5 rounded-xl hover:bg-[#962230] transition-all font-bold text-xs shadow-sm disabled:opacity-50"
                         >
                           {manualTorSubmitting ? <Loader2 size={16} className="animate-spin" /> : 'Save and Re-check Eligibility'}
                         </button>
@@ -484,7 +484,7 @@ export default function AdminEvaluationPage() {
               <button 
                 onClick={handleDispatchAssignments}
                 disabled={isSubmitting || selectedSubjectsToAssign.length === 0}
-                className="bg-[#0F2A1D] text-[#E3EED4] px-6 py-2.5 rounded-xl hover:bg-[#375534] transition-all flex items-center justify-center font-bold text-xs shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                className="bg-[#7D1924] text-[#FCEEEF] px-6 py-2.5 rounded-xl hover:bg-[#962230] transition-all flex items-center justify-center font-bold text-xs shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {isSubmitting ? <Loader2 size={16} className="animate-spin" /> : `Assign Selected (${selectedSubjectsToAssign.length})`}
               </button>
