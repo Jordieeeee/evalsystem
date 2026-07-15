@@ -1,549 +1,1112 @@
-import { useEffect, useState, useRef } from 'react';
-import { UserPlus, Search, Filter, Edit3, Trash2, X, Loader2, ChevronDown } from 'lucide-react';
-import { studentService } from '../../../services/studentService';
+import React, { useState, useEffect } from 'react';
+import { 
+  Plus, Search, SlidersHorizontal, ChevronRight, X, Edit3, 
+  ArrowLeft, Save, User, GraduationCap, BookOpen, CheckCircle2, ShieldAlert, Trash2,
+  Check, AlertCircle, Info, Lock, BookMarked, Calendar, CheckCircle, AlertTriangle
+} from 'lucide-react';
 
-// Helper function to generate academic year options
-// Philippine academic calendar: June-March, so if current month is before June, academic year starts previous year
-const getAcademicYearOptions = () => {
-  const currentYear = new Date().getFullYear();
-  const currentMonth = new Date().getMonth(); // 0-11 (January is 0)
+// --- FIREBASE IMPORT ---
+import { db } from '../../../services/firebase'; 
+import { 
+  collection, doc, setDoc, updateDoc, addDoc, deleteDoc, query, where, onSnapshot, getDoc 
+} from 'firebase/firestore';
 
-  // If current month is before June (0-5), academic year starts previous year
-  // If current month is June or later (6-11), academic year starts current year
-  const startYear = currentMonth < 6 ? currentYear - 1 : currentYear;
+// --- CONFIG & UTILS IMPORT ---
+import { checkEnrollmentLimit, getFallbackSubjects, normalizeYear, normalizeSemester, MAX_UNITS_CONFIG } from '../../../services/curriculumConfig';
 
-  // Generate options: 5 years back through 5 years forward (11 total options)
-  const options = [];
-  for (let i = -5; i <= 5; i++) {
-    const year = startYear + i;
-    options.push(`${year}-${year + 1}`);
-  }
+const BATSTATEU_GRADES = ['1.00', '1.25', '1.50', '1.75', '2.00', '2.25', '2.50', '2.75', '3.00', '5.00', 'Inc', 'Drop', 'W'];
+const ADMISSION_TYPES = ['freshman', 'transferee', 'shiftee'];
+const ENROLLMENT_STATUSES = ['active', 'inactive', 'graduated', 'loa', 'transferred out'];
+const CLASSIFICATIONS = ['regular', 'irregular'];
+const COURSE_LIST = ['BSIT', 'BSCS', 'BSEMC', 'BSIS'];
+const SECTION_LIST = ['A', 'B', 'C', 'D'];
+const SEMESTER_LIST = ['1st Semester', '2nd Semester', 'Summer'];
+const ACADEMIC_YEARS_LIST = ['2026-2027', '2027-2028', '2028-2029', '2029-2030'];
 
-  return options;
-};
-
-// Get current academic year as default
-const getCurrentAcademicYear = () => {
-  const options = getAcademicYearOptions();
-  return options[5]; // The 6th option is the current academic year (index 5 in -5 to +5 range)
-};
-
-export default function AdminStudentsPage() {
+export default function StudentManagement() {
+  // --- APPLICATION DATA STATES ---
   const [students, setStudents] = useState([]);
+  const [studentSubjects, setStudentSubjects] = useState([]); 
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  // --- LIVE FIRESTORE CURRICULUM STATES ---
+  const [newSubjectsCatalog, setNewSubjectsCatalog] = useState([]);
+  const [oldSubjectsCatalog, setOldSubjectsCatalog] = useState([]);
+  const [curriculumMappings, setCurriculumMappings] = useState({});
+
+  // --- INTERACTIVE VIEW CONTROLLERS ---
+  const [view, setView] = useState('directory'); 
+  const [selectedStudent, setSelectedStudent] = useState(null);
+  const [activeTab, setActiveTab] = useState('Summary'); 
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [isManageModalOpen, setIsManageModalOpen] = useState(false);
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
+
+  // --- SEARCH ENGINE AND FILTER STATES ---
   const [searchQuery, setSearchQuery] = useState('');
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingStudent, setEditingStudent] = useState(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [formData, setFormData] = useState({ id: '', name: '', email: '', course: 'BSIT', year: '1', school_year: getCurrentAcademicYear(), student_type: 'Regular', status: 'active' });
+  const [filterCurriculum, setFilterCurriculum] = useState('All');
+  const [filterYear, setFilterYear] = useState('All');
+  const [filterStatus, setFilterStatus] = useState('All');
+  const [filterAdmission, setFilterAdmission] = useState('All');
+  const [filterClassification, setFilterClassification] = useState('All');
+  const [filterTrack, setFilterTrack] = useState('All');
 
-  // TODO: Student Type should eventually be derived from actual subject completion vs. curriculum sequence, not manually entered
-  
-  // Filter states
-  const [isFilterOpen, setIsFilterOpen] = useState(false);
-  const [filters, setFilters] = useState({
-    program: 'all',
-    year: 'all',
-    status: 'all'
+  // --- UI FEEDBACK ALERTS & GRADUATION matrix ---
+  const [toast, setToast] = useState(null);
+  const [srCodeChecking, setSrCodeChecking] = useState(false);
+  const [srCodeError, setSrCodeError] = useState('');
+
+  // Inline Grading States
+  const [gradingSubjectId, setGradingSubjectId] = useState(null);
+  const [selectedInlineGrade, setSelectedInlineGrade] = useState('1.00');
+
+  // --- LOCAL PRELOAD PREVIEW STATE FOR NEW STUDENTS ---
+  const [previewCourseLoad, setPreviewCourseLoad] = useState([]);
+  const [maxAllowedPreviewUnits, setMaxAllowedPreviewUnits] = useState(21);
+
+  // Helper to trigger toast notifications
+  const showToast = (message, type = 'success') => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 4000);
+  };
+
+  // --- FORM STATES ---
+  const [newStudent, setNewStudent] = useState({
+    studentId: '', email: '', firstName: '', middleInitial: '', lastName: '',
+    course: 'BSIT', track: '', curriculum: 'NEW', yearLevel: 'First Year', semester: '1st Semester',
+    section: 'A', admissionType: 'freshman', classification: 'regular', status: 'active', academicYear: '2026-2027',
+    phoneNumber: '', guardianContact: '', admissionDate: new Date().toISOString().split('T')[0], photoUrl: ''
   });
-  const filterRef = useRef(null);
 
-  // Close filter dropdown when clicking outside
+  const [editStudentForm, setEditStudentForm] = useState({
+    firstName: '', middleInitial: '', lastName: '', email: '', course: 'BSIT', track: '',
+    curriculum: 'NEW', yearLevel: 'First Year', semester: '1st Semester', section: 'A', admissionType: 'freshman', classification: 'regular', status: 'active', academicYear: '2026-2027',
+    phoneNumber: '', guardianContact: '', admissionDate: '', photoUrl: ''
+  });
+
+  // Manual Subject Entry Form State (Manage Course Load Modal)
+  const [newSubjectRecord, setNewSubjectRecord] = useState({
+    subjectCode: '', subjectTitle: '', units: 3, term: '2026-2027', semester: '1st Semester', grade: 'In Progress'
+  });
+
+  // Side Effect: Auto-reset Track value if Year Level is lower than 3rd Year
   useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (filterRef.current && !filterRef.current.contains(event.target)) {
-        setIsFilterOpen(false);
+    const numericYear = normalizeYear(newStudent.yearLevel);
+    if (numericYear === '1' || numericYear === '2') {
+      if (newStudent.track !== '') {
+        setNewStudent(prev => ({ ...prev, track: '' }));
       }
-    };
-
-    if (isFilterOpen) {
-      document.addEventListener('mousedown', handleClickOutside);
     }
-
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, [isFilterOpen]);
+  }, [newStudent.yearLevel]);
 
   useEffect(() => {
-    let active = true;
-    const loadStudents = async () => {
-      try {
-        setLoading(true);
-        const data = await studentService.getAllStudents();
-        if (active) {
-          setStudents(data);
-        }
-      } catch (error) {
-        console.error('Failed to load students:', error);
-      } finally {
-        if (active) {
-          setLoading(false);
-        }
+    const numericYear = normalizeYear(editStudentForm.yearLevel);
+    if (numericYear === '1' || numericYear === '2') {
+      if (editStudentForm.track !== '') {
+        setEditStudentForm(prev => ({ ...prev, track: '' }));
       }
-    };
+    }
+  }, [editStudentForm.yearLevel]);
 
-    void loadStudents();
-    return () => {
-      active = false;
-    };
+  // --- 1. STREAM LIVE STUDENTS FROM FIRESTORE ---
+  useEffect(() => {
+    setLoading(true);
+    const unsubscribe = onSnapshot(collection(db, 'students'), (snapshot) => {
+      const list = [];
+      snapshot.forEach((doc) => list.push({ id: doc.id, ...doc.data() }));
+      setStudents(list);
+      setLoading(false);
+    }, (err) => {
+      setError("Database stream connection dropped.");
+      setLoading(false);
+    });
+    return () => unsubscribe();
   }, []);
 
-  const openAddModal = () => {
-    setEditingStudent(null);
-    setFormData({ id: '', name: '', email: '', course: 'BSIT', year: '1', school_year: getCurrentAcademicYear(), student_type: 'Regular', status: 'active' });
-    setIsModalOpen(true);
-  };
-
-  const openEditModal = (student) => {
-    setEditingStudent(student.id);
-    setFormData({
-      id: student.studentId || student.id || '',
-      name: student.name || '',
-      email: student.email || '',
-      course: student.program || student.course || 'BSIT',
-      year: student.year || '1',
-      school_year: student.school_year || getCurrentAcademicYear(),
-      student_type: student.student_type || 'Regular',
-      status: student.status || 'active'
+  // --- 2. STREAM LIVE SUBJECT CATALOGS AND MAPPINGS FROM FIRESTORE ---
+  useEffect(() => {
+    const unsubNew = onSnapshot(collection(db, 'new_subjects'), (snapshot) => {
+      const list = [];
+      snapshot.forEach((doc) => { list.push({ code: doc.id, ...doc.data() }); });
+      setNewSubjectsCatalog(list);
     });
-    setIsModalOpen(true);
-  };
 
-  const handleDelete = async (id) => {
-    if (!window.confirm('Are you certain you want to remove this student entry from the directory?')) {
+    const unsubOld = onSnapshot(collection(db, 'old_subjects'), (snapshot) => {
+      const list = [];
+      snapshot.forEach((doc) => {
+        const data = doc.data();
+        list.push({ code: data.courseCode || doc.id, ...data });
+      });
+      setOldSubjectsCatalog(list);
+    });
+
+    const unsubMappings = onSnapshot(collection(db, 'curriculum_mappings'), (snapshot) => {
+      const mappingObj = {};
+      snapshot.forEach((doc) => { mappingObj[doc.id] = doc.data(); });
+      setCurriculumMappings(mappingObj);
+    });
+
+    return () => { unsubNew(); unsubOld(); unsubMappings(); };
+  }, []);
+
+  // --- 3. STREAM STUDENT-SPECIFIC SUBJECT RECORDS & DYNAMIC SYNC ---
+  useEffect(() => {
+    if (!selectedStudent || !selectedStudent.studentId) {
+      setStudentSubjects([]);
       return;
     }
+    const q = query(collection(db, 'studentSubjects'), where('studentId', '==', selectedStudent.studentId));
+    const unsubscribe = onSnapshot(q, async (snapshot) => {
+      const list = [];
+      snapshot.forEach((doc) => list.push({ id: doc.id, ...doc.data() }));
+      
+      if (list.length === 0) {
+        const catalog = selectedStudent.curriculum === 'NEW' ? newSubjectsCatalog : oldSubjectsCatalog;
+        
+        let matchingSubjects = catalog.filter(sub => {
+          const subYear = normalizeYear(sub.yearLevel || sub.year);
+          const targetYear = normalizeYear(selectedStudent.yearLevel);
 
-    try {
-      await studentService.deleteStudentProfile(id);
-      setStudents((prev) => prev.filter((student) => student.id !== id));
-    } catch (error) {
-      console.error('Failed to delete student:', error);
-      alert('Unable to delete the selected student.');
-    }
-  };
+          let matchesSem = false;
+          const targetSem = normalizeSemester(selectedStudent.semester);
+          if (Array.isArray(sub.semesterOffered)) {
+            matchesSem = sub.semesterOffered.some(s => normalizeSemester(s) === targetSem);
+          } else {
+            matchesSem = normalizeSemester(sub.semesterOffered || sub.semester) === targetSem;
+          }
 
-  const handleInputChange = (e) => {
-    const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
-  };
+          const subTrack = String(sub.track || '').toLowerCase().trim();
+          const studentTrack = String(selectedStudent.track || '').toLowerCase().trim();
+          const matchesTrack = subTrack === 'common' || subTrack === '' || studentTrack.includes(subTrack) || subTrack.includes(studentTrack);
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (!formData.id || !formData.name || !formData.email || !formData.school_year || !formData.student_type) {
-      alert('Please complete the required student information.');
-      return;
-    }
+          return subYear === targetYear && matchesSem && matchesTrack;
+        });
 
-    setIsSubmitting(true);
-    try {
-      const payload = {
-        studentId: formData.id,
-        id: formData.id,
-        name: formData.name,
-        email: formData.email,
-        program: formData.course,
-        course: formData.course,
-        year: formData.year,
-        yearSection: `${formData.year}${['1', '2', '3', '4'].includes(formData.year) ? ['st', 'nd', 'rd', 'th'][Number(formData.year) - 1] : 'th'} Year`,
-        school_year: formData.school_year,
-        student_type: formData.student_type,
-        status: formData.status,
-        createdAt: new Date().toISOString()
-      };
-
-      if (editingStudent) {
-        await studentService.updateStudentProfile(editingStudent, payload);
-        setStudents((prev) => prev.map((student) => (
-          student.id === editingStudent
-            ? { ...student, ...payload, id: editingStudent }
-            : student
-        )));
-      } else {
-        const exists = students.some((student) =>
-          (student.studentId || student.id) === formData.id
-        );
-        if (exists) {
-          alert('This Student Number is already taken.');
-          return;
+        if (matchingSubjects.length === 0) {
+          matchingSubjects = getFallbackSubjects(selectedStudent.course, selectedStudent.yearLevel, selectedStudent.semester);
         }
 
-        const created = await studentService.createStudentProfile(formData.id, payload);
-        setStudents((prev) => [created, ...prev]);
+        if (matchingSubjects.length > 0) {
+          const timestamp = new Date().toISOString();
+          for (const sub of matchingSubjects) {
+            await addDoc(collection(db, 'studentSubjects'), {
+              studentId: selectedStudent.studentId,
+              subjectCode: (sub.courseCode || sub.code || sub.subjectCode || '').toUpperCase(),
+              subjectTitle: sub.courseTitle || sub.title || sub.subjectTitle || 'Curriculum Core Course',
+              grade: 'In Progress',
+              term: selectedStudent.academicYear || '2026-2027',
+              semester: selectedStudent.semester || '1st Semester',
+              status: 'in progress',
+              units: parseInt(sub.creditUnits || sub.units || 3, 10),
+              remarks: 'Pending for Evaluation',
+              recordedAt: timestamp
+            });
+          }
+          return; 
+        }
       }
 
-      setIsModalOpen(false);
-      setFormData({ id: '', name: '', email: '', course: 'BSIT', year: '1', school_year: getCurrentAcademicYear(), student_type: 'Regular', status: 'active' });
-    } catch (error) {
-      console.error('Failed to save student:', error);
-      alert('Unable to save the student record.');
-    } finally {
-      setIsSubmitting(false);
+      setStudentSubjects(list);
+    }, (err) => console.error(err));
+
+    return () => unsubscribe();
+  }, [selectedStudent, newSubjectsCatalog, oldSubjectsCatalog]);
+
+  // --- 4. PRELOAD DYNAMIC PREVIEW TRACK BINDINGS IN NEW ENTRY FORM ---
+  useEffect(() => {
+    if (view !== 'add-student') return;
+    
+    const catalog = newStudent.curriculum === 'NEW' ? newSubjectsCatalog : oldSubjectsCatalog;
+    
+    let matchingSubjects = catalog.filter(sub => {
+      const subYear = normalizeYear(sub.yearLevel || sub.year);
+      const targetYear = normalizeYear(newStudent.yearLevel);
+
+      let matchesSem = false;
+      const targetSem = normalizeSemester(newStudent.semester);
+      if (Array.isArray(sub.semesterOffered)) {
+        matchesSem = sub.semesterOffered.some(s => normalizeSemester(s) === targetSem);
+      } else {
+        matchesSem = normalizeSemester(sub.semesterOffered || sub.semester) === targetSem;
+      }
+
+      const subTrack = String(sub.track || '').toLowerCase().trim();
+      const studentTrack = String(newStudent.track || '').toLowerCase().trim();
+      const matchesTrack = subTrack === 'common' || subTrack === '' || studentTrack.includes(subTrack) || subTrack.includes(studentTrack);
+
+      return subYear === targetYear && matchesSem && matchesTrack;
+    });
+
+    if (matchingSubjects.length === 0) {
+      matchingSubjects = getFallbackSubjects(newStudent.course, newStudent.yearLevel, newStudent.semester);
+    }
+
+    const mappedPreview = matchingSubjects.map((course, idx) => ({
+      id: course.id || `${course.courseCode || course.code || course.subjectCode || idx}`,
+      academicYear: newStudent.academicYear || '2026-2027',
+      semester: newStudent.semester || '1st Semester',
+      subjectCode: (course.courseCode || course.code || course.subjectCode || '').toUpperCase(),
+      descriptiveTitle: course.courseTitle || course.title || course.subjectTitle || 'Curriculum Core Course',
+      units: parseInt(course.creditUnits || course.units || 3, 10),
+      grade: 'In Progress'
+    }));
+
+    setPreviewCourseLoad(mappedPreview);
+
+    const dummySum = mappedPreview.reduce((acc, curr) => acc + curr.units, 0);
+    const limitCheck = checkEnrollmentLimit(newStudent.curriculum, newStudent.yearLevel, newStudent.semester, dummySum);
+    setMaxAllowedPreviewUnits(limitCheck.maxAllowed || 21);
+
+  }, [newStudent.curriculum, newStudent.yearLevel, newStudent.semester, newStudent.academicYear, newStudent.course, newStudent.track, newSubjectsCatalog, oldSubjectsCatalog, view]);
+
+  // Dynamic KPI Metric Engine
+  const getCalculatedMetrics = () => {
+    const evaluated = studentSubjects.filter(sub => sub.grade && !['Inc', 'Drop', 'W', 'In Progress'].includes(sub.grade));
+    const passed = studentSubjects.filter(sub => sub.status === 'passed' || (parseFloat(sub.grade) >= 1.0 && parseFloat(sub.grade) <= 3.0));
+    let computedGwa = '0.00';
+    if (evaluated.length > 0) {
+      let totalWeightedGrades = 0, totalUnits = 0;
+      evaluated.forEach(sub => {
+        const gradeVal = parseFloat(sub.grade);
+        const unitVal = parseFloat(sub.units || 3);
+        if (!isNaN(gradeVal)) { totalWeightedGrades += (gradeVal * unitVal); totalUnits += unitVal; }
+      });
+      if (totalUnits > 0) computedGwa = (totalWeightedGrades / totalUnits).toFixed(2);
+    }
+    return { gwa: computedGwa, totalAssigned: studentSubjects.length, evaluatedCount: evaluated.length, passedCount: passed.length };
+  };
+
+  const metrics = getCalculatedMetrics();
+
+  // Field text filtering
+  const handleNameStrFilter = (value) => value.replace(/[^a-zA-Z\s]/g, '');
+  const handleIdStrFilter = (value) => value.replace(/[^0-9\-]/g, '');
+
+  // --- GENERATE GROUPED CURRICULUM AUDIT REPORT ---
+  const generateStructuredAuditReport = () => {
+    if (!selectedStudent) return [];
+    
+    const catalog = selectedStudent.curriculum === 'NEW' ? newSubjectsCatalog : oldSubjectsCatalog;
+    const passedCollection = studentSubjects.filter(s => s.status === 'passed' || (parseFloat(s.grade) >= 1.0 && parseFloat(s.grade) <= 3.0));
+    
+    const structuredStructure = {};
+
+    catalog.forEach(course => {
+      const mappedYear = normalizeYear(course.yearLevel || course.year);
+      let yearLabel = `Year ${mappedYear}`;
+      if (mappedYear === '1') yearLabel = "1st Year Placement";
+      if (mappedYear === '2') yearLabel = "2nd Year Placement";
+      if (mappedYear === '3') yearLabel = "3rd Year Placement";
+      if (mappedYear === '4') yearLabel = "4th Year Placement";
+
+      let semLabel = "1st Semester";
+      if (Array.isArray(course.semesterOffered)) {
+        if (course.semesterOffered.some(s => normalizeSemester(s) === '2nd')) semLabel = "2nd Semester";
+        else if (course.semesterOffered.some(s => normalizeSemester(s) === 'summer')) semLabel = "Summer/Midyear Term";
+      } else {
+        const semClean = normalizeSemester(course.semesterOffered || course.semester);
+        if (semClean === '2nd') semLabel = "2nd Semester";
+        else if (semClean === 'summer') semLabel = "Summer/Midyear Term";
+      }
+
+      const courseTrack = String(course.track || '').toLowerCase().trim();
+      const studentTrack = String(selectedStudent.track || '').toLowerCase().trim();
+      if (courseTrack !== 'common' && courseTrack !== '' && courseTrack !== 'no track assigned') {
+        if (!studentTrack.includes(courseTrack) && !courseTrack.includes(studentTrack)) {
+          return; 
+        }
+      }
+
+      const matchedRecord = studentSubjects.find(s => s.subjectCode === (course.courseCode || course.code || '').toUpperCase());
+      const isCompleted = matchedRecord && (matchedRecord.status === 'passed' || (parseFloat(matchedRecord.grade) >= 1.0 && parseFloat(matchedRecord.grade) <= 3.0));
+
+      let prerequisitesMet = true;
+      let missingPrereqs = [];
+      const prereqsArray = Array.isArray(course.prerequisites) ? course.prerequisites : (course.prerequisites ? [course.prerequisites] : []);
+      
+      prereqsArray.forEach(pCode => {
+        if (pCode && pCode !== '-') {
+          const completedPrereq = passedCollection.some(s => s.subjectCode.replace(/[^a-zA-Z0-9]/g, '') === pCode.replace(/[^a-zA-Z0-9]/g, ''));
+          if (!completedPrereq) {
+            prerequisitesMet = false;
+            missingPrereqs.push(pCode);
+          }
+        }
+      });
+
+      if (!structuredStructure[yearLabel]) structuredStructure[yearLabel] = {};
+      if (!structuredStructure[yearLabel][semLabel]) structuredStructure[yearLabel][semLabel] = [];
+
+      structuredStructure[yearLabel][semLabel].push({
+        code: course.courseCode || course.code,
+        title: course.courseTitle || course.title,
+        units: course.creditUnits || course.units || 3,
+        status: isCompleted ? 'EVALUATED' : 'DEFICIENT',
+        grade: isCompleted ? matchedRecord.grade : '-',
+        prereqs: prereqsArray.filter(p => p && p !== '-'),
+        prereqsMet: prerequisitesMet, // <-- FIXED: Pointed to correctly declared variable name
+        missingPrereqs
+      });
+    });
+
+    return structuredStructure;
+  };
+
+  const handleAddStudent = async (e) => {
+    e.preventDefault();
+    if (!newStudent.studentId) return;
+
+    if (!newStudent.email.toLowerCase().endsWith('@g.tlsu.edu.ph')) {
+      showToast("Registration rejected. Email must use domain: @g.tlsu.edu.ph", "error");
+      return;
+    }
+
+    const startYear = parseInt(newStudent.academicYear.split('-')[0], 10);
+    if (isNaN(startYear) || startYear < 2026) {
+      showToast("Cannot assign records to past academic years prior to 2026.", "error");
+      return;
+    }
+
+    const totalPreviewUnits = previewCourseLoad.reduce((acc, curr) => acc + curr.units, 0);
+    const limitCheck = checkEnrollmentLimit(newStudent.curriculum, newStudent.yearLevel, newStudent.semester, totalPreviewUnits);
+
+    if (!limitCheck.success) { showToast(limitCheck.message, "error"); return; }
+
+    const isUnique = await checkSrCodeUniqueness(newStudent.studentId);
+    if (!isUnique) { showToast("Duplicate SR-Code detected.", "error"); return; }
+
+    try {
+      const timestamp = new Date().toISOString();
+      await setDoc(doc(db, 'students', newStudent.studentId), { ...newStudent, createdAt: timestamp, updatedAt: timestamp, id: newStudent.studentId });
+      
+      for (const course of previewCourseLoad) {
+        await addDoc(collection(db, 'studentSubjects'), {
+          studentId: newStudent.studentId,
+          subjectCode: course.subjectCode,
+          subjectTitle: course.descriptiveTitle,
+          grade: course.grade,
+          status: 'in progress',
+          term: course.academicYear,
+          semester: course.semester,
+          units: course.units,
+          remarks: 'Pending for Evaluation',
+          recordedAt: timestamp
+        });
+      }
+      showToast("Student profile created and courses loaded successfully!");
+      setView('directory');
+      setNewStudent({
+        studentId: '', email: '', firstName: '', middleInitial: '', lastName: '',
+        course: 'BSIT', track: '', curriculum: 'NEW', yearLevel: 'First Year', semester: '1st Semester',
+        section: 'A', admissionType: 'freshman', classification: 'regular', status: 'active', academicYear: '2026-2027'
+      });
+    } catch (err) { showToast("Failed to write student parameters.", "error"); }
+  };
+
+  const handleEditStudentSubmit = async (e) => {
+    e.preventDefault();
+    if (!editStudentForm.email.toLowerCase().endsWith('@g.tlsu.edu.ph')) {
+      showToast("Email address must use domain: @g.tlsu.edu.ph", "error");
+      return;
+    }
+
+    const startYear = parseInt(editStudentForm.academicYear.split('-')[0], 10);
+    if (isNaN(startYear) || startYear < 2026) {
+      showToast("Cannot assign records to terms prior to 2026.", "error");
+      return;
+    }
+
+    try {
+      await updateDoc(doc(db, 'students', selectedStudent.studentId), { ...editStudentForm, updatedAt: new Date().toISOString() });
+      setSelectedStudent({ ...selectedStudent, ...editStudentForm });
+      setIsEditModalOpen(false);
+      showToast("Student profile updated.");
+    } catch (err) { showToast("Database core update was rejected.", "error"); }
+  };
+
+  const handleStatusUpdate = async () => {
+    const nextStatus = selectedStudent.status === 'active' ? 'inactive' : 'active';
+    try {
+      await updateDoc(doc(db, 'students', selectedStudent.studentId), { status: nextStatus, updatedAt: new Date().toISOString() });
+      setSelectedStudent(prev => ({ ...prev, status: nextStatus }));
+      showToast(`Status modified to ${nextStatus.toUpperCase()}`);
+    } catch (err) { console.error(err); }
+  };
+
+  const handleAddManualSubject = async (e) => {
+    e.preventDefault();
+    if (!newSubjectRecord.subjectCode || !selectedStudent) return;
+
+    const currentSemUnits = studentSubjects.filter(sub => sub.semester === newSubjectRecord.semester).reduce((acc, curr) => acc + (parseInt(curr.units) || 0), 0);
+    const totalUnitsWithNew = currentSemUnits + parseInt(newSubjectRecord.units, 10);
+
+    const limitCheck = checkEnrollmentLimit(selectedStudent.curriculum, selectedStudent.yearLevel, newSubjectRecord.semester, totalUnitsWithNew);
+    if (!limitCheck.success) { showToast(limitCheck.message, "error"); return; }
+
+    try {
+      await addDoc(collection(db, 'studentSubjects'), {
+        studentId: selectedStudent.studentId,
+        subjectCode: newSubjectRecord.subjectCode.toUpperCase(),
+        subjectTitle: newSubjectRecord.subjectTitle || 'Manual Entry Course',
+        grade: newSubjectRecord.grade,
+        status: newSubjectRecord.grade === 'In Progress' ? 'in progress' : 'passed',
+        term: newSubjectRecord.term,
+        semester: newSubjectRecord.semester,
+        units: parseInt(newSubjectRecord.units, 10) || 3,
+        recordedAt: new Date().toISOString()
+      });
+      setIsManageModalOpen(false);
+      showToast("Course node loaded successfully!");
+    } catch (err) { showToast("Failed to link course load.", "error"); }
+  };
+
+  const handleInputGradeSubmit = async (subjectId) => {
+    const statusText = selectedInlineGrade === '5.00' ? 'failed' : ['Inc', 'Drop', 'W'].includes(selectedInlineGrade) ? 'incomplete' : 'passed';
+    try {
+      await updateDoc(doc(db, 'studentSubjects', subjectId), { grade: selectedInlineGrade, status: statusText, recordedAt: new Date().toISOString() });
+      setGradingSubjectId(null);
+      showToast("Grade updated successfully!");
+    } catch (err) { showToast("Failed to write grade.", "error"); }
+  };
+
+  const checkSrCodeUniqueness = async (srCode) => {
+    if (!srCode) return true;
+    setSrCodeChecking(true);
+    try {
+      const docSnap = await getDoc(doc(db, 'students', srCode));
+      if (docSnap.exists()) { setSrCodeChecking(false); return false; }
+    } catch (err) { console.error(err); }
+    setSrCodeChecking(false);
+    return true;
+  };
+
+  const handleDeleteRecord = async (docId) => {
+    if (confirm("Permanently strip this academic record item?")) {
+      await deleteDoc(doc(db, 'studentSubjects', docId));
+      showToast("Record successfully deleted.");
     }
   };
 
-  const filteredStudents = students.filter((student) => {
-    const search = searchQuery.toLowerCase();
-    const matchesSearch = (
-      (student.name || '').toLowerCase().includes(search) ||
-      (student.studentId || student.id || '').toLowerCase().includes(search) ||
-      (student.program || student.course || '').toLowerCase().includes(search)
-    );
-    
-    const matchesProgram = filters.program === 'all' || 
-      (student.program || student.course || '') === filters.program;
-    
-    const matchesYear = filters.year === 'all' || 
-      (student.year || '') === filters.year;
-    
-    const matchesStatus = filters.status === 'all' || 
-      (student.status || 'active') === filters.status;
-    
-    return matchesSearch && matchesProgram && matchesYear && matchesStatus;
+  const openEditModal = () => {
+    if (!selectedStudent) return;
+    setEditStudentForm({ ...selectedStudent });
+    setIsEditModalOpen(true);
+  };
+
+  const directoryFilteredList = students.filter(s => {
+    const stringBlock = `${s.firstName || ''} ${s.lastName || ''} ${s.studentId || ''}`.toLowerCase();
+    const matchSearch = stringBlock.includes(searchQuery.toLowerCase());
+    const matchCurr = filterCurriculum === 'All' || s.curriculum === filterCurriculum;
+    const matchYear = filterYear === 'All' || normalizeYear(s.yearLevel) === normalizeYear(filterYear);
+    const matchStatus = filterStatus === 'All' || s.status === filterStatus;
+    const matchAdmin = filterAdmission === 'All' || s.admissionType === filterAdmission;
+    const matchClass = filterClassification === 'All' || s.classification === filterClassification;
+    const matchTrack = filterTrack === 'All' || s.track === filterTrack;
+    return matchSearch && matchCurr && matchYear && matchStatus && matchAdmin && matchClass && matchTrack;
   });
 
-  const handleFilterChange = (filterType, value) => {
-    setFilters(prev => ({ ...prev, [filterType]: value }));
-  };
-
-  const resetFilters = () => {
-    setFilters({
-      program: 'all',
-      year: 'all',
-      status: 'all'
-    });
-  };
-
-  const hasActiveFilters = filters.program !== 'all' || filters.year !== 'all' || filters.status !== 'all';
-
-  const getInitials = (name = '') => name.split(' ').filter(Boolean).slice(0, 2).map((part) => part[0]).join('').toUpperCase() || 'S';
-
-  if (loading) {
-    return (
-      <div className="flex justify-center items-center h-64 text-[#375534]">
-        <Loader2 className="animate-spin" size={32} />
-      </div>
-    );
-  }
-
   return (
-    <div className="space-y-6 text-[#0F2A1D]">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <h2 className="text-3xl font-extrabold tracking-tight text-[#0F2A1D]">Students</h2>
+    <div className="p-8 bg-[#f8fafc] min-h-screen text-slate-800 font-sans antialiased relative">
+      
+      {/* Toast Notification Banner */}
+      {toast && (
+        <div className={`fixed top-5 right-5 z-50 flex items-center gap-2.5 px-5 py-3.5 rounded-xl border shadow-xl transition-all duration-300 ${
+          toast.type === 'error' ? 'bg-red-50 text-red-800 border-red-200' : 'bg-emerald-50 text-emerald-800 border-emerald-200'
+        } text-xs font-bold`}>
+          <span>{toast.message}</span>
         </div>
-        <button
-          onClick={openAddModal}
-          className="flex items-center gap-2 bg-[#7D1924] text-[#FCEEEF] text-xs font-bold uppercase tracking-wider px-5 py-3.5 rounded-2xl hover:bg-[#962230] transition-all shadow-sm active:scale-[0.98]"
-        >
-          <UserPlus size={16} /> Add Student
-        </button>
-      </div>
+      )}
 
-      <div className="flex flex-col sm:flex-row gap-3">
-        <div className="relative flex-1">
-          <Search className="absolute left-4 top-3.5 text-slate-400" size={18} />
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search students by name or ID..."
-            className="w-full bg-slate-50 border border-slate-200 text-sm pl-12 pr-4 py-3.5 rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#375534]/20 focus:bg-white transition-all text-slate-800 placeholder-slate-400 font-medium"
-          />
-        </div>
-        <div className="relative" ref={filterRef}>
-          <button 
-            onClick={() => setIsFilterOpen(!isFilterOpen)}
-            className={`flex items-center justify-center gap-2 border text-slate-700 text-xs font-bold uppercase tracking-wider px-5 py-3 rounded-2xl transition-all
-              ${hasActiveFilters ? 'bg-[#7D1924] text-[#FCEEEF] border-[#7D1924]' : 'bg-slate-50 border-slate-200 hover:bg-slate-100'}`}
-          >
-            <Filter size={16} /> Filter {hasActiveFilters && `(${Object.values(filters).filter(f => f !== 'all').length})`}
-          </button>
-          
-          {isFilterOpen && (
-            <div className="absolute right-0 top-full mt-2 bg-white border border-slate-200 rounded-2xl shadow-xl p-4 w-64 z-10 animate-in fade-in zoom-in-95 duration-200">
-              <div className="flex justify-between items-center mb-3">
-                <h4 className="text-xs font-black uppercase tracking-wider text-slate-900">Filters</h4>
-                <button 
-                  onClick={resetFilters}
-                  className="text-[10px] font-bold text-[#7D1924] hover:text-[#962230] uppercase tracking-wider"
-                >
-                  Reset
-                </button>
-              </div>
-              
-              <div className="space-y-3">
-                <div>
-                  <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">Program</label>
-                  <select
-                    value={filters.program}
-                    onChange={(e) => handleFilterChange('program', e.target.value)}
-                    className="w-full border border-slate-200 bg-slate-50 p-2.5 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#375534]/20 focus:bg-white transition-all text-xs font-bold text-slate-800"
-                  >
-                    <option value="all">All Programs</option>
-                    <option value="BSIT">BSIT</option>
-                    <option value="BSCS">BSCS</option>
-                    <option value="BSBA">BSBA</option>
-                    <option value="BSN">BSN</option>
-                    <option value="BSED">BSED</option>
-                    <option value="BSA">BSA</option>
-                  </select>
-                </div>
-                
-                <div>
-                  <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">Year Level</label>
-                  <select
-                    value={filters.year}
-                    onChange={(e) => handleFilterChange('year', e.target.value)}
-                    className="w-full border border-slate-200 bg-slate-50 p-2.5 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#375534]/20 focus:bg-white transition-all text-xs font-bold text-slate-800"
-                  >
-                    <option value="all">All Years</option>
-                    <option value="1">1st Year</option>
-                    <option value="2">2nd Year</option>
-                    <option value="3">3rd Year</option>
-                    <option value="4">4th Year</option>
-                  </select>
-                </div>
-                
-                <div>
-                  <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">Status</label>
-                  <select
-                    value={filters.status}
-                    onChange={(e) => handleFilterChange('status', e.target.value)}
-                    className="w-full border border-slate-200 bg-slate-50 p-2.5 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#375534]/20 focus:bg-white transition-all text-xs font-bold text-slate-800"
-                  >
-                    <option value="all">All Status</option>
-                    <option value="active">Active</option>
-                    <option value="inactive">Inactive</option>
-                  </select>
-                </div>
-              </div>
+      {/* ================= VIEW 1: DIRECTORY WORKBENCH ================= */}
+      {view === 'directory' && (
+        <div className="max-w-7xl mx-auto space-y-6">
+          <div className="flex justify-between items-center">
+            <div className="text-left">
+              <h1 className="text-3xl font-extrabold tracking-tight text-slate-900">Students Directory</h1>
+              <p className="text-slate-500 text-sm mt-0.5">Automated curriculum tracing and transcript management matrix.</p>
             </div>
-          )}
-        </div>
-      </div>
+            <button onClick={() => setView('add-student')} className="bg-blue-600 hover:bg-blue-700 text-white font-bold px-5 py-2.5 rounded-xl shadow-md text-sm flex items-center gap-1.5">
+              <Plus size={16} /> Add New Student
+            </button>
+          </div>
 
-      <div className="bg-white rounded-3xl border border-slate-200/80 shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="border-b border-slate-200/60 bg-slate-50/70 text-[10px] font-black text-slate-400 uppercase tracking-wider">
-                <th className="p-4 pl-6">Student</th>
-                <th className="p-4">Student No.</th>
-                <th className="p-4">Program</th>
-                <th className="p-4">Year Level</th>
-                <th className="p-4">Status</th>
-                <th className="p-4 pr-6 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 text-xs font-bold text-slate-700">
-              {filteredStudents.length > 0 ? (
-                filteredStudents.map((student) => (
-                  <tr key={student.id} className="hover:bg-slate-50/40 transition-colors group">
-                    <td className="p-4 pl-6">
-                      <div className="flex items-center gap-3">
-                        <div className="w-9 h-9 rounded-xl bg-[#375534]/10 text-[#375534] font-black text-[11px] flex items-center justify-center uppercase shrink-0">
-                          {getInitials(student.name)}
-                        </div>
-                        <div>
-                          <p className="font-extrabold text-slate-900 transition-colors">{student.name || 'Unnamed Student'}</p>
-                          <p className="text-[11px] text-slate-400 font-medium mt-0.5">{student.email || '-'}</p>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="p-4 font-mono text-slate-500 tracking-tight">{student.studentId || student.id}</td>
-                    <td className="p-4 text-slate-900 font-extrabold">{student.program || student.course || '—'}</td>
-                    <td className="p-4 text-slate-600 font-extrabold pl-6">{student.year || '—'}</td>
-                    <td className="p-4">
-                      <span className="px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-emerald-50 text-emerald-700 border border-emerald-100">
-                        {student.status || 'active'}
-                      </span>
-                    </td>
-                    <td className="p-4 pr-6 text-right">
-                      <div className="flex items-center justify-end gap-1.5 opacity-40 group-hover:opacity-100 transition-opacity">
-                        <button
-                          onClick={() => openEditModal(student)}
-                          className="p-2 text-slate-500 hover:text-[#7D1924] hover:bg-slate-100 rounded-xl transition-all"
-                        >
-                          <Edit3 size={15} />
-                        </button>
-                        <button
-                          onClick={() => handleDelete(student.id)}
-                          className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-all"
-                        >
-                          <Trash2 size={15} />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))
-              ) : (
-                <tr>
-                  <td colSpan="6" className="p-8 text-center text-slate-400 font-bold uppercase tracking-wider">
-                    No records found matching the criteria.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      {isModalOpen && (
-        <div className="fixed inset-0 z-50 bg-[F5F5DC]/40 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in-95 duration-200">
-            <div className="bg-[#7D1924] text-[#FCEEEF] p-5 flex justify-between items-center">
-              <h3 className="text-sm font-black uppercase tracking-wider">
-                {editingStudent ? 'Edit Student Configuration' : 'Register New Student Profile'}
-              </h3>
-              <button onClick={() => setIsModalOpen(false)} className="text-[#AEC3B0] hover:text-white transition-colors">
-                <X size={18} />
-              </button>
-            </div>
-
-            <form onSubmit={handleSubmit} className="p-6 space-y-4 text-xs font-bold text-slate-600">
-              <div>
-                <label className="block uppercase tracking-wider mb-1.5 text-slate-400">Student Number</label>
-                <input
-                  type="text"
-                  name="id"
-                  required
-                  disabled={!!editingStudent}
-                  value={formData.id}
-                  onChange={handleInputChange}
-                  placeholder="e.g., TLSU-2026-0001"
-                  className="w-full border border-slate-200 bg-slate-50 p-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#375534]/20 focus:bg-white transition-all text-slate-800 disabled:opacity-50 disabled:bg-slate-100"
+          {/* Filter Bar Controls */}
+          <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 space-y-4">
+            <div className="flex flex-wrap gap-3 items-center justify-between">
+              <div className="relative flex-1 min-w-[320px]">
+                <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                <input 
+                  type="text" placeholder="Search by SR-Code or student name..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full pl-11 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500/20"
                 />
               </div>
-
-              <div>
-                <label className="block uppercase tracking-wider mb-1.5 text-slate-400">Full Name</label>
-                <input
-                  type="text"
-                  name="name"
-                  required
-                  value={formData.name}
-                  onChange={handleInputChange}
-                  placeholder="e.g., Maria Santos"
-                  className="w-full border border-slate-200 bg-slate-50 p-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#375534]/20 focus:bg-white transition-all text-slate-800"
-                />
-              </div>
-
-              <div>
-                <label className="block uppercase tracking-wider mb-1.5 text-slate-400">Institutional Email</label>
-                <input
-                  type="email"
-                  name="email"
-                  required
-                  value={formData.email}
-                  onChange={handleInputChange}
-                  placeholder="e.g., m.santos@tlsu.edu.ph"
-                  className="w-full border border-slate-200 bg-slate-50 p-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#375534]/20 focus:bg-white transition-all text-slate-800"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block uppercase tracking-wider mb-1.5 text-slate-400">Program</label>
-                  <select
-                    name="course"
-                    value={formData.course}
-                    onChange={handleInputChange}
-                    className="w-full border border-slate-200 bg-slate-50 p-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#375534]/20 focus:bg-white transition-all text-slate-800"
-                  >
-                    <option value="BSIT">BSIT</option>
-                    <option value="BSCS">BSCS</option>
-                    <option value="BSBA">BSBA</option>
-                    <option value="BSN">BSN</option>
-                    <option value="BSED">BSED</option>
-                    <option value="BSA">BSA</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block uppercase tracking-wider mb-1.5 text-slate-400">Year Level</label>
-                  <select
-                    name="year"
-                    value={formData.year}
-                    onChange={handleInputChange}
-                    className="w-full border border-slate-200 bg-slate-50 p-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#375534]/20 focus:bg-white transition-all text-slate-800"
-                  >
-                    <option value="1">1</option>
-                    <option value="2">2</option>
-                    <option value="3">3</option>
-                    <option value="4">4</option>
-                  </select>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block uppercase tracking-wider mb-1.5 text-slate-400">School Year</label>
-                  <div className="relative">
-                    <select
-                      name="school_year"
-                      value={formData.school_year}
-                      onChange={handleInputChange}
-                      required
-                      className="w-full border border-slate-200 bg-slate-50 p-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#375534]/20 focus:bg-white transition-all text-slate-800 appearance-none pr-10"
-                    >
-                      {getAcademicYearOptions().map((year) => (
-                        <option key={year} value={year}>
-                          {year}
-                        </option>
-                      ))}
-                    </select>
-                    <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={16} />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block uppercase tracking-wider mb-1.5 text-slate-400">Student Type</label>
-                  <div className="relative">
-                    <select
-                      name="student_type"
-                      value={formData.student_type}
-                      onChange={handleInputChange}
-                      required
-                      className="w-full border border-slate-200 bg-slate-50 p-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#375534]/20 focus:bg-white transition-all text-slate-800 appearance-none pr-10"
-                    >
-                      <option value="Regular">Regular</option>
-                      <option value="Irregular">Irregular</option>
-                    </select>
-                    <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={16} />
-                  </div>
-                </div>
-              </div>
-
-              <div>
-                <label className="block uppercase tracking-wider mb-1.5 text-slate-400">Status</label>
-                <select
-                  name="status"
-                  value={formData.status}
-                  onChange={handleInputChange}
-                  className="w-full border border-slate-200 bg-slate-50 p-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#375534]/20 focus:bg-white transition-all text-slate-800"
-                >
+              <div className="flex gap-2.5">
+                <select value={filterYear} onChange={(e) => setFilterYear(e.target.value)} className="border rounded-xl px-4 py-2.5 text-sm bg-slate-50 text-slate-600 font-medium focus:outline-none">
+                  <option value="All">All Year Levels</option>
+                  <option value="First Year">1st Year</option>
+                  <option value="Second Year">2nd Year</option>
+                  <option value="Third Year">3rd Year</option>
+                  <option value="Fourth Year">4th Year</option>
+                </select>
+                <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className="border rounded-xl px-4 py-2.5 text-sm bg-slate-50 text-slate-600 font-medium focus:outline-none">
+                  <option value="All">All Statuses</option>
                   <option value="active">Active</option>
                   <option value="inactive">Inactive</option>
+                  <option value="graduated">Graduated</option>
+                  <option value="loa">LOA</option>
+                </select>
+                <button onClick={() => setShowAdvancedFilters(!showAdvancedFilters)} className={`border p-2.5 rounded-xl ${showAdvancedFilters ? 'bg-slate-950 text-white' : 'bg-slate-50 text-slate-600'}`}><SlidersHorizontal size={18} /></button>
+              </div>
+            </div>
+
+            {showAdvancedFilters && (
+              <div className="pt-4 border-t border-slate-100 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 text-left text-xs font-bold text-slate-400">
+                <div><label className="mb-1 block uppercase">Curriculum Version</label>
+                  <select value={filterCurriculum} onChange={e=>setFilterCurriculum(e.target.value)} className="w-full bg-slate-50 border rounded-xl p-2 font-medium text-slate-600 outline-none"><option value="All">All Curriculums</option><option value="NEW">New Curriculum</option><option value="OLD">Old Curriculum</option></select>
+                </div>
+                <div><label className="mb-1 block uppercase">Admission Type</label>
+                  <select value={filterAdmission} onChange={e=>setFilterAdmission(e.target.value)} className="w-full bg-slate-50 border rounded-xl p-2 font-medium text-slate-600 outline-none"><option value="All">All Admissions</option><option value="freshman">Freshman</option><option value="transferee">Transferee</option><option value="shiftee">Shiftee</option></select>
+                </div>
+                <div><label className="mb-1 block uppercase">Classification</label>
+                  <select value={filterClassification} onChange={e=>setFilterClassification(e.target.value)} className="w-full bg-slate-50 border rounded-xl p-2 font-medium text-slate-600 outline-none"><option value="All">All Classifications</option><option value="regular">Regular</option><option value="irregular">Irregular</option></select>
+                </div>
+                <div><label className="mb-1 block uppercase">Track specialization</label>
+                  <select value={filterTrack} onChange={e=>setFilterTrack(e.target.value)} className="w-full bg-slate-50 border rounded-xl p-2 font-medium text-slate-600 outline-none"><option value="All">All Tracks</option><option value="Business Analytics">Business Analytics</option><option value="Service Management">Service Management</option><option value="Networking Technology">Networking Technology</option></select>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Main List Table */}
+          <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="bg-slate-50 border-b text-slate-400 text-xs font-bold uppercase tracking-wider">
+                    <th className="px-6 py-4">Student Info</th>
+                    <th className="px-6 py-4">SR-Code</th>
+                    <th className="px-6 py-4">Current Placement</th>
+                    <th className="px-6 py-4">Track Matrix</th>
+                    <th className="px-6 py-4">Curriculum Plan</th>
+                    <th className="px-6 py-4">Status</th>
+                    <th className="px-6 py-4 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 text-sm font-medium">
+                  {directoryFilteredList.map((student) => (
+                    <tr key={student.id} onClick={() => { setSelectedStudent(student); setView('student-details'); setActiveTab('Summary'); }} className="hover:bg-slate-50/50 cursor-pointer transition">
+                      <td className="px-6 py-4 font-bold text-slate-900">{student.lastName}, {student.firstName}</td>
+                      <td className="px-6 py-4 font-bold text-blue-600">{student.studentId}</td>
+                      <td className="px-6 py-4 text-slate-500">AY {student.academicYear || 'N/A'} • {student.semester || '1st Semester'} • {student.yearLevel}</td>
+                      <td className="px-6 py-4 text-slate-400 text-xs">{student.track || 'Unassigned'}</td>
+                      <td className="px-6 py-4"><span className="text-[10px] font-extrabold px-2 py-0.5 rounded bg-slate-100 text-slate-600">{student.course} • {student.curriculum === 'NEW' ? 'New' : 'Old'} Curriculum</span></td>
+                      <td className="px-6 py-4"><span className="text-[10px] font-bold px-2.5 py-1 rounded-full uppercase tracking-wider bg-emerald-50 text-emerald-700">{student.status}</span></td>
+                      <td className="px-6 py-4 text-right"><ChevronRight size={18} className="text-slate-300" /></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ================= VIEW 2: PROFILE EVALUATION WORKBENCH ================= */}
+      {view === 'student-details' && selectedStudent && (
+        <div className="max-w-7xl mx-auto space-y-6 animate-fadeIn">
+          
+          {/* Main Top Header Block */}
+          <div className="bg-white p-6 rounded-2xl border flex flex-col md:flex-row justify-between items-start md:items-center gap-4 text-left shadow-sm">
+            <div className="flex items-center gap-4">
+              <button onClick={() => { setView('directory'); setSelectedStudent(null); }} className="w-10 h-10 flex items-center justify-center border hover:bg-slate-50 rounded-xl transition text-slate-600"><ArrowLeft size={16} /></button>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h1 className="text-xl font-extrabold text-[#0f172a]">{selectedStudent.lastName}, {selectedStudent.firstName}</h1>
+                  <span className="text-[10px] font-bold px-2 py-0.5 bg-[#e2fbf1] text-[#0e9f6e] rounded-md uppercase">{selectedStudent.status}</span>
+                </div>
+                <p className="text-slate-400 text-[13px] mt-1 font-semibold flex items-center gap-2">
+                  <span>{selectedStudent.studentId}</span><span>•</span>
+                  <span>{selectedStudent.course} ({selectedStudent.yearLevel})</span><span>•</span>
+                  <span>AY {selectedStudent.academicYear} ({selectedStudent.semester})</span>
+                </p>
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <button onClick={handleStatusUpdate} className="px-4 py-2.5 border hover:bg-slate-50 rounded-xl text-xs font-bold text-slate-700 transition">Toggle Status</button>
+              <button onClick={openEditModal} className="px-4 py-2.5 bg-[#0f172a] hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition">Manage Profile Configuration</button>
+            </div>
+          </div>
+
+          {/* Sub Tab Navigation Selection Bar */}
+          <div className="flex gap-2 border-b border-slate-100 pb-0.5">
+            {['Summary', 'Course Load', 'Evaluations'].map((tab) => (
+              <button key={tab} onClick={() => setActiveTab(tab)} className={`px-6 py-2.5 text-xs font-bold rounded-xl transition ${activeTab === tab ? 'bg-white text-[#0f172a] shadow-sm border border-slate-200' : 'text-slate-500 hover:text-slate-800'}`}>{tab}</button>
+            ))}
+          </div>
+
+          <div className="space-y-6">
+            {/* --- TAB: SUMMARY --- */}
+            {activeTab === 'Summary' && (
+              <div className="space-y-6 text-left animate-fadeIn">
+                <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+                  <div className="bg-white p-5 rounded-2xl border"><p className="text-slate-400 text-xs font-bold uppercase">GWA</p><p className="text-3xl font-extrabold mt-2">{metrics.gwa}</p></div>
+                  <div className="bg-white p-5 rounded-2xl border"><p className="text-slate-400 text-xs font-bold uppercase">Assigned Subjects</p><p className="text-3xl font-extrabold mt-2">{metrics.totalAssigned}</p></div>
+                  <div className="bg-white p-5 rounded-2xl border"><p className="text-slate-400 text-xs font-bold uppercase">Evaluated Count</p><p className="text-3xl font-extrabold mt-2">{metrics.evaluatedCount}</p></div>
+                  <div className="bg-white p-5 rounded-2xl border"><p className="text-slate-400 text-xs font-bold uppercase">Passed Checklist</p><p className="text-3xl font-extrabold text-[#10b981] mt-2">{metrics.passedCount}</p></div>
+                </div>
+
+                <div className="bg-white p-6 rounded-2xl border space-y-4">
+                  <h3 className="text-sm font-bold">Academic Portfolio Registry</h3>
+                  <div className="grid grid-cols-2 gap-4 text-xs font-semibold pt-2 border-t">
+                    <div className="flex justify-between py-1 border-b"> <span className="text-slate-500">Degree Course Map</span> <span className="font-bold text-slate-900">{selectedStudent.course}</span> </div>
+                    <div className="flex justify-between py-1 border-b"> <span className="text-slate-500">Curriculum Tracking Version</span> <span className="font-bold text-slate-900">{selectedStudent.curriculum === 'NEW' ? 'New Curriculum' : 'Old Curriculum'}</span> </div>
+                    <div className="flex justify-between py-1 border-b"> <span className="text-slate-500">Classification</span> <span className="font-bold text-slate-900 capitalize">{selectedStudent.classification}</span> </div>
+                    <div className="flex justify-between py-1 border-b"> <span className="text-slate-500">Assigned Track Specialization</span> <span className="font-bold text-slate-900">{selectedStudent.track || 'Unassigned'}</span> </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* --- TAB: COURSE LOAD --- */}
+            {activeTab === 'Course Load' && (
+              <div className="bg-white rounded-2xl border text-left overflow-hidden animate-fadeIn">
+                <div className="p-6 flex justify-between items-center border-b">
+                  <div><h3 className="text-sm font-bold">Course Load Tracking Workspace</h3><p className="text-slate-400 text-xs mt-0.5">Linked curricular items recorded in database matrix.</p></div>
+                  <button onClick={() => setIsManageModalOpen(true)} className="px-4 py-1.5 border hover:bg-slate-50 rounded-lg text-xs font-bold">Append New Course Node</button>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="bg-slate-50 text-slate-400 font-bold uppercase tracking-wider border-b">
+                        <th className="px-6 py-3.5">Academic Term</th>
+                        <th className="px-6 py-3.5">Semester Placement</th>
+                        <th className="px-6 py-3.5">Subject Code</th>
+                        <th className="px-6 py-3.5">Descriptive Title</th>
+                        <th className="px-6 py-3.5 text-center">Units</th>
+                        <th className="px-6 py-3.5 text-center">Grade Rating</th>
+                        <th className="px-6 py-3.5 text-right">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y font-semibold text-slate-600">
+                      {studentSubjects.map((sub, idx) => (
+                        <tr key={idx} className="hover:bg-slate-50/20">
+                          <td className="px-6 py-4">{sub.term}</td>
+                          <td className="px-6 py-4">{sub.semester}</td>
+                          <td className="px-6 py-4 font-bold text-slate-900">{sub.subjectCode}</td>
+                          <td className="px-6 py-4 text-slate-500">{sub.subjectTitle}</td>
+                          <td className="px-6 py-4 text-center font-bold text-slate-900">{sub.units}</td>
+                          <td className="px-6 py-4 text-center">
+                            {gradingSubjectId === sub.id ? (
+                              <div className="flex items-center justify-end gap-1" onClick={e=>e.stopPropagation()}>
+                                <select value={selectedInlineGrade} onChange={e=>setSelectedInlineGrade(e.target.value)} className="border rounded bg-white p-1 text-xs font-bold text-slate-900"><option value="In Progress">In Progress</option>{BATSTATEU_GRADES.map(g=><option key={g} value={g}>{g}</option>)}</select>
+                                <button onClick={()=>handleInputGradeSubmit(sub.id)} className="bg-emerald-600 text-white rounded p-1"><Check size={12}/></button>
+                                <button onClick={()=>setGradingSubjectId(null)} className="bg-slate-100 rounded p-1 text-slate-500"><X size={12}/></button>
+                              </div>
+                            ) : (
+                              <span onClick={()=>{setGradingSubjectId(sub.id); setSelectedInlineGrade(sub.grade);}} className="cursor-pointer underline text-blue-600 font-extrabold">{sub.grade}</span>
+                            )}
+                          </td>
+                          <td className="px-6 py-4 text-right"><button onClick={() => handleDeleteRecord(sub.id)} className="text-red-500 hover:text-red-700 text-xs">Remove</button></td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {/* --- TAB: EVALUATIONS (AUTOMATED CONTINUOUS AUDIT DIALOG PANEL) --- */}
+            {activeTab === 'Evaluations' && (
+              <div className="space-y-8 text-left animate-fadeIn">
+                
+                {/* Global Summary Badge Block */}
+                <div className="bg-white p-5 rounded-2xl border border-slate-200/70 shadow-xs flex flex-wrap gap-4 items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="p-3 bg-blue-50 text-blue-600 rounded-xl"><BookMarked size={20} /></div>
+                    <div>
+                      <h3 className="font-extrabold text-slate-900 text-sm">Automated Checksheet Matrix Audit</h3>
+                      <p className="text-slate-400 text-xs mt-0.5 font-medium">Real-time validation tracking for complete degree requirements.</p>
+                    </div>
+                  </div>
+                  <div className="flex gap-4 items-center">
+                    <div className="text-right">
+                      <span className="text-[10px] font-black tracking-wider block uppercase text-slate-400">Total Progress Matrix</span>
+                      <span className="text-base font-black text-slate-900">
+                        {(() => {
+                          const catalog = selectedStudent.curriculum === 'NEW' ? newSubjectsCatalog : oldSubjectsCatalog;
+                          const passed = studentSubjects.filter(s => s.status === 'passed' || (parseFloat(s.grade) >= 1.0 && parseFloat(s.grade) <= 3.0));
+                          return `${passed.length} / ${catalog.length} Completed`;
+                        })()}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Hierarchical Year/Semester Nested Grid Cards */}
+                {Object.entries(generateStructuredAuditReport())
+                  .sort(([a], [b]) => a.localeCompare(b))
+                  .map(([yearKey, semesters]) => (
+                    <div key={yearKey} className="space-y-4">
+                      <div className="flex items-center gap-2 border-b border-slate-100 pb-1.5">
+                        <span className="w-1.5 h-4 bg-slate-900 rounded-xs" />
+                        <h4 className="font-black text-slate-900 text-sm tracking-tight">{yearKey} Master Audit Framework</h4>
+                      </div>
+
+                      {Object.entries(semesters).map(([semKey, courses]) => {
+                        const currYearClean = normalizeYear(yearKey);
+                        const semShort = semKey.includes('2nd') ? '2' : semKey.includes('Summer') ? 'mid' : '1';
+                        const maxUnitsPermitted = MAX_UNITS_CONFIG[selectedStudent.curriculum === 'NEW' ? 'new_curriculum' : 'old_curriculum'][`y${currYearClean}_s${semShort}`] || 21;
+                        const activelyTakenUnits = courses.filter(c => c.status === 'EVALUATED').reduce((sum, c) => sum + c.units, 0);
+
+                        return (
+                          <div key={semKey} className="bg-white border border-slate-200 rounded-2xl shadow-2xs overflow-hidden">
+                            <div className="px-5 py-4 bg-slate-50/50 border-b flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <Calendar size={14} className="text-slate-400" />
+                                <span className="font-bold text-slate-900 text-xs tracking-tight">{semKey} Term Allocation</span>
+                              </div>
+                              <span className="text-[11px] font-bold text-slate-600 bg-slate-100 border px-2.5 py-0.5 rounded-full shadow-3xs">
+                                Permitted Limit Load: {activelyTakenUnits} / {maxUnitsPermitted} Units
+                              </span>
+                            </div>
+
+                            <div className="overflow-x-auto">
+                              <table className="w-full text-left text-xs border-collapse">
+                                <thead>
+                                  <tr className="text-[10px] text-slate-400 font-bold uppercase tracking-wider bg-slate-50/20 border-b">
+                                    <th className="px-5 py-3 w-[15%]">Subject Code</th>
+                                    <th className="px-5 py-3 w-[45%]">Descriptive Course Map Target</th>
+                                    <th className="px-5 py-3 text-center w-[10%]">Units</th>
+                                    <th className="px-5 py-3 w-[15%]">Prerequisites Audit</th>
+                                    <th className="px-5 py-3 text-center w-[15%]">Status Matrix</th>
+                                  </tr>
+                                </thead>
+                                <tbody className="divide-y font-semibold text-slate-600/90">
+                                  {courses.map((c, i) => (
+                                    <tr key={i} className={`hover:bg-slate-50/30 ${c.status === 'EVALUATED' ? 'bg-emerald-50/5' : 'bg-red-50/5'}`}>
+                                      <td className="px-5 py-3.5 font-black text-slate-950 tracking-wide">{c.code}</td>
+                                      <td className="px-5 py-3.5 font-medium text-slate-600">{c.title}</td>
+                                      <td className="px-5 py-3.5 text-center text-slate-950 font-black">{c.units}</td>
+                                      
+                                      <td className="px-5 py-3.5">
+                                        {c.prereqs.length > 0 ? (
+                                          <div className="space-y-1">
+                                            <div className="flex flex-wrap gap-1">
+                                              {c.prereqs.map((p, idx) => (
+                                                <span key={idx} className={`text-[10px] font-bold px-1.5 py-0.2 rounded border ${c.missingPrereqs.includes(p) ? 'bg-amber-50 text-amber-700 border-amber-200' : 'bg-slate-50 text-slate-600 border-slate-200'}`}>
+                                                  {p}
+                                                </span>
+                                              ))}
+                                            </div>
+                                            {!c.prereqsMet && (
+                                              <span className="text-[10px] text-amber-600 font-bold flex items-center gap-0.5">
+                                                <AlertTriangle size={10} /> Prerequisite Unmet
+                                              </span>
+                                            )}
+                                          </div>
+                                        ) : (
+                                          <span className="text-slate-400 font-medium italic text-[11px]">None</span>
+                                        )}
+                                      </td>
+
+                                      <td className="px-5 py-3.5 text-center">
+                                        <span className={`text-[10px] font-black border px-2.5 py-0.5 rounded-full tracking-wider uppercase shadow-3xs ${
+                                          c.status === 'EVALUATED' 
+                                            ? 'bg-emerald-50 border-emerald-200 text-emerald-600' 
+                                            : 'bg-red-50 border-red-200 text-red-600'
+                                        }`}>
+                                          {c.status}
+                                        </span>
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ================= VIEW 3: ADMIT NEW STUDENT ENTRY FORM ================= */}
+      {view === 'add-student' && (
+        <div className="max-w-5xl mx-auto space-y-6 text-left animate-fadeIn">
+          <button onClick={() => setView('directory')} className="text-slate-500 hover:text-slate-800 font-semibold text-sm flex items-center gap-2"><ArrowLeft size={16} /> Back to Directory</button>
+          
+          <div className="flex items-center gap-3">
+            <div className="p-3 bg-blue-50 text-blue-600 rounded-xl"><Plus size={24} /></div>
+            <div>
+              <h1 className="text-3xl font-extrabold text-slate-900">Admit New Student</h1>
+              <p className="text-slate-500 text-sm font-medium">Verify structural placement variables. Missing items pull from system catalogs.</p>
+            </div>
+          </div>
+
+          <form onSubmit={handleAddStudent} className="space-y-6">
+            <div className="bg-white p-6 rounded-2xl border space-y-4 shadow-sm">
+              <h2 className="text-base font-bold flex items-center gap-2 border-b pb-2"><GraduationCap size={18} className="text-blue-500" /> Academic Block</h2>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Program / Course Map</label>
+                  <select value={newStudent.course} onChange={e => setNewStudent({...newStudent, course: e.target.value})} className="w-full bg-slate-50 border rounded-xl p-2.5 text-xs font-semibold outline-none">
+                    {COURSE_LIST.map(c => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Year Level Placement *</label>
+                  <select value={newStudent.yearLevel} onChange={e => setNewStudent({...newStudent, yearLevel: e.target.value})} className="w-full bg-slate-50 border rounded-xl p-2.5 text-xs font-semibold outline-none">
+                    <option value="First Year">First Year</option>
+                    <option value="Second Year">Second Year</option>
+                    <option value="Third Year">Third Year</option>
+                    <option value="Fourth Year">Fourth Year</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Assigned Semester Target *</label>
+                  <select value={newStudent.semester} onChange={e => setNewStudent({...newStudent, semester: e.target.value})} className="w-full bg-slate-50 border rounded-xl p-2.5 text-xs font-semibold outline-none">
+                    {SEMESTER_LIST.map(s => <option key={s} value={s}>{s}</option>)}
+                  </select>
+                </div>
+                
+                {/* Specialization Track — Conditional Lock for 1st & 2nd Year */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-400 uppercase mb-1 flex items-center gap-1">
+                    Specialization Track 
+                    {(normalizeYear(newStudent.yearLevel) === '1' || normalizeYear(newStudent.yearLevel) === '2') && <Lock size={12} className="text-slate-400" />}
+                  </label>
+                  <select 
+                    value={newStudent.track} 
+                    disabled={normalizeYear(newStudent.yearLevel) === '1' || normalizeYear(newStudent.yearLevel) === '2'}
+                    onChange={e => setNewStudent({...newStudent, track: e.target.value})} 
+                    className={`w-full ${normalizeYear(newStudent.yearLevel) === '1' || normalizeYear(newStudent.yearLevel) === '2' ? 'bg-slate-100 text-slate-400 border-slate-100 cursor-not-allowed shadow-none' : 'bg-slate-50 text-amber-700 font-bold border-slate-200'} border rounded-xl p-2.5 text-xs font-semibold outline-none`}
+                  >
+                    <option value="">Select Specialization Track</option>
+                    <option value="Business Analytics">Business Analytics</option>
+                    <option value="Service Management">Service Management</option>
+                    <option value="Networking Technology">Networking Technology</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Curriculum Version Profile</label>
+                  <select value={newStudent.curriculum} onChange={e => setNewStudent({...newStudent, curriculum: e.target.value})} className="w-full bg-slate-50 border rounded-xl p-2.5 text-xs font-bold outline-none text-blue-600">
+                    <option value="NEW">New Curriculum</option>
+                    <option value="OLD">Old Curriculum</option>
+                  </select>
+                </div>
+                
+                {/* Dynamic Academic Year Dropdown Selection Matrix */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Academic Year *</label>
+                  <select 
+                    value={newStudent.academicYear} 
+                    onChange={e => setNewStudent({...newStudent, academicYear: e.target.value})} 
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs font-semibold outline-none"
+                  >
+                    {ACADEMIC_YEARS_LIST.map(year => (
+                      <option key={year} value={year}>{year}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-white p-6 rounded-2xl border space-y-4 shadow-sm">
+              <h2 className="text-base font-bold border-b pb-2 flex items-center gap-2"><User size={18} className="text-blue-500" /> Identity Block</h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-400 uppercase mb-1">SR-Code identifier *</label>
+                  <input 
+                    type="text" required placeholder="e.g. 23-08214" 
+                    value={newStudent.studentId} 
+                    onBlur={e=>checkSrCodeUniqueness(e.target.value)} 
+                    onChange={e=>{
+                      setNewStudent({...newStudent, studentId: handleIdStrFilter(e.target.value)}); 
+                      setSrCodeError('');
+                    }} 
+                    className="w-full bg-slate-50 border rounded-xl p-2.5 text-xs font-medium outline-none" 
+                  />
+                  {srCodeError && <p className="text-red-500 mt-1 text-[11px] font-bold">{srCodeError}</p>}
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Official Email Address *</label>
+                  <input 
+                    type="text" required placeholder="username@g.tlsu.edu.ph" 
+                    value={newStudent.email} 
+                    onChange={e=>setNewStudent({...newStudent, email: e.target.value.trim()})} 
+                    className="w-full bg-slate-50 border rounded-xl p-2.5 text-xs outline-none focus:ring-1 focus:ring-blue-500" 
+                  />
+                </div>
+                <div className="grid grid-cols-3 gap-3 md:col-span-2">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-400 uppercase mb-1">First Name *</label>
+                    <input type="text" required value={newStudent.firstName} onChange={e=>setNewStudent({...newStudent, firstName: handleNameStrFilter(e.target.value)})} className="w-full bg-slate-50 border rounded-xl p-2.5 text-xs outline-none" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-400 uppercase mb-1">M.I.</label>
+                    <input type="text" maxLength={2} value={newStudent.middleInitial} onChange={e=>setNewStudent({...newStudent, middleInitial: handleNameStrFilter(e.target.value)})} className="w-full bg-slate-50 border rounded-xl p-2.5 text-xs text-center outline-none" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Last Name *</label>
+                    <input type="text" required value={newStudent.lastName} onChange={e=>setNewStudent({...newStudent, lastName: handleNameStrFilter(e.target.value)})} className="w-full bg-slate-50 border rounded-xl p-2.5 text-xs outline-none" />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* ================= DYNAMIC VISUAL AUTOLOAD COMPONENT ================= */}
+            <div className="bg-white border rounded-2xl p-6 shadow-sm">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="font-extrabold text-slate-900 text-sm">Course Load Pre-loaded Matrix Preview</h3>
+                <span className="text-xs font-bold text-slate-700 bg-slate-100 border px-3 py-1 rounded-full">
+                  {previewCourseLoad.reduce((acc, curr) => acc + curr.units, 0)} / {maxAllowedPreviewUnits} Units
+                </span>
+              </div>
+              <table className="w-full text-left text-xs">
+                <thead>
+                  <tr className="text-slate-400 border-b font-bold uppercase">
+                    <th className="pb-2">Semester Placement</th>
+                    <th className="pb-2">Subject Code</th>
+                    <th className="pb-2">Descriptive Title Map Target</th>
+                    <th className="pb-2 text-center">Units</th>
+                  </tr>
+                </thead>
+                <tbody className="font-semibold text-slate-600">
+                  {previewCourseLoad.map((item, index) => (
+                    <tr key={index} className="border-b hover:bg-slate-50/50">
+                      <td className="py-3 text-slate-400">{item.semester}</td>
+                      <td className="py-3 font-extrabold text-slate-950">{item.subjectCode}</td>
+                      <td className="py-3">{item.descriptiveTitle}</td>
+                      <td className="py-3 text-center text-slate-950 font-bold">{item.units}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="flex justify-end gap-3">
+              <button type="button" onClick={() => setView('directory')} className="px-5 py-2 border rounded-xl font-bold text-xs text-slate-400 hover:bg-slate-50">Cancel</button>
+              <button type="submit" className="bg-blue-600 text-white font-bold px-6 py-2 rounded-xl text-xs shadow-xs hover:bg-blue-700">Admit Student Profile</button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {/* ================= MODAL: EDIT INFORMATION ================= */}
+      {isEditModalOpen && selectedStudent && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex justify-center items-center z-50 animate-fadeIn text-left">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-xl p-6 border border-slate-100 max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center border-b pb-4 mb-4">
+              <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2"><Edit3 size={18} className="text-blue-600" /> Edit Student Records Configuration</h3>
+              <button onClick={() => setIsEditModalOpen(false)} className="text-slate-400 hover:text-slate-700 transition"><X size={20} /></button>
+            </div>
+            <form onSubmit={handleEditStudentSubmit} className="space-y-4 text-sm">
+              <div className="grid grid-cols-3 gap-3">
+                <div><label className="block text-xs font-bold text-slate-55 uppercase mb-1">First Name</label>
+                  <input type="text" required value={editStudentForm.firstName} onChange={e=>setEditStudentForm({...editStudentForm, firstName: handleNameStrFilter(e.target.value)})} className="w-full bg-slate-50 border rounded-xl p-2.5 text-sm focus:outline-none" />
+                </div>
+                <div><label className="block text-xs font-bold text-slate-55 uppercase mb-1">M.I.</label>
+                  <input type="text" value={editStudentForm.middleInitial} onChange={e=>setEditStudentForm({...editStudentForm, middleInitial: handleNameStrFilter(e.target.value)})} className="w-full bg-slate-50 border rounded-xl p-2.5 text-sm focus:outline-none" />
+                </div>
+                <div><label className="block text-xs font-bold text-slate-55 uppercase mb-1">Last Name</label>
+                  <input type="text" required value={editStudentForm.lastName} onChange={e=>setEditStudentForm({...editStudentForm, lastName: handleNameStrFilter(e.target.value)})} className="w-full bg-slate-50 border rounded-xl p-2.5 text-sm focus:outline-none" />
+                </div>
+              </div>
+              
+              <div className="grid grid-cols-2 gap-3 text-xs font-semibold">
+                <div>
+                  <label className="block text-slate-500 mb-1">Academic Year *</label>
+                  <select value={editStudentForm.academicYear} onChange={e=>setEditStudentForm({...editStudentForm, academicYear: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-sm outline-none">
+                    {ACADEMIC_YEARS_LIST.map(year => <option key={year} value={year}>{year}</option>)}
+                  </select>
+                </div>
+                <div><label className="block text-slate-500 mb-1">Semester</label>
+                  <select value={editStudentForm.semester} onChange={e=>setEditStudentForm({...editStudentForm, semester: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-sm">
+                    {SEMESTER_LIST.map(sem => <option key={sem} value={sem}>{sem}</option>)}
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-3 gap-3">
+                <div><label className="block text-xs font-bold text-slate-55 uppercase mb-1">Year Level</label>
+                  <select value={editStudentForm.yearLevel} onChange={e => setEditStudentForm({...editStudentForm, yearLevel: e.target.value})} className="w-full bg-white border rounded-xl p-2.5 text-sm focus:outline-none cursor-pointer">
+                    <option value="First Year">First Year</option>
+                    <option value="Second Year">Second Year</option>
+                    <option value="Third Year">Third Year</option>
+                    <option value="Fourth Year">Fourth Year</option>
+                  </select>
+                </div>
+                <div><label className="block text-xs font-bold text-slate-55 uppercase mb-1">Section</label>
+                  <select value={editStudentForm.section} onChange={e => setEditStudentForm({...editStudentForm, section: e.target.value})} className="w-full bg-white border rounded-xl p-2.5 text-sm focus:outline-none cursor-pointer">
+                    {SECTION_LIST.map(sec => <option key={sec} value={sec}>{sec}</option>)}
+                  </select>
+                </div>
+                <div><label className="block text-xs font-bold text-slate-55 uppercase mb-1">Classification</label>
+                  <select value={editStudentForm.classification} onChange={e => setEditStudentForm({...editStudentForm, classification: e.target.value})} className="w-full bg-white border rounded-xl p-2.5 text-sm cursor-pointer">
+                    {CLASSIFICATIONS.map(c => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-55 uppercase mb-1">Official Email Address *</label>
+                <input type="text" required value={editStudentForm.email} onChange={e=>setEditStudentForm({...editStudentForm, email: e.target.value.trim()})} className="w-full border rounded-xl p-2.5 text-sm outline-none bg-white font-medium" />
+              </div>
+
+              {/* Specialization Track Block inside Modal Sheet */}
+              <div>
+                <label className="block text-xs font-bold text-slate-55 uppercase mb-1 flex items-center gap-1">
+                  Assigned Track Specialization
+                  {(normalizeYear(editStudentForm.yearLevel) === '1' || normalizeYear(editStudentForm.yearLevel) === '2') && <Lock size={12} className="text-slate-400" />}
+                </label>
+                <select 
+                  value={editStudentForm.track} 
+                  disabled={normalizeYear(editStudentForm.yearLevel) === '1' || normalizeYear(editStudentForm.yearLevel) === '2'}
+                  onChange={e => setEditStudentForm({...editStudentForm, track: e.target.value})} 
+                  className={`w-full ${normalizeYear(editStudentForm.yearLevel) === '1' || normalizeYear(editStudentForm.yearLevel) === '2' ? 'bg-slate-100 text-slate-400 border-slate-100 cursor-not-allowed shadow-none' : 'bg-white text-slate-900'} border rounded-xl p-2.5 text-sm outline-none`}
+                >
+                  <option value="">Select Specialization Track</option>
+                  <option value="Business Analytics">Business Analytics</option>
+                  <option value="Service Management">Service Management</option>
+                  <option value="Networking Technology">Networking Technology</option>
                 </select>
               </div>
 
-              <div className="pt-3 flex justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={() => setIsModalOpen(false)}
-                  className="bg-slate-100 border border-slate-200 text-slate-700 px-4 py-2.5 rounded-xl hover:bg-slate-200 transition-all"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={isSubmitting}
-                  className="bg-[#7D1924] text-[#FCEEEF] px-5 py-2.5 rounded-xl hover:bg-[#962230] transition-all disabled:opacity-60"
-                >
-                  {isSubmitting ? <Loader2 className="animate-spin" size={16} /> : (editingStudent ? 'Save Changes' : 'Register Entry')}
-                </button>
+              <div className="flex justify-end gap-3 pt-4 border-t">
+                <button type="button" onClick={() => setIsEditModalOpen(false)} className="px-4 py-2 border rounded-xl font-semibold hover:bg-slate-50">Cancel</button>
+                <button type="submit" className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-xl font-bold flex items-center gap-1.5"><Save size={16} /> Save Profiles</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ================= MODAL: MANAGE COURSE LOAD ================= */}
+      {isManageModalOpen && selectedStudent && (
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs flex justify-center items-center z-50">
+          <div className="bg-white rounded-2xl p-6 w-full max-w-md border shadow-xl text-left">
+            <h3 className="text-sm font-bold text-slate-900 border-b pb-3 mb-4">Manual Course Load Addition Matrix</h3>
+            <form onSubmit={handleAddManualSubject} className="space-y-4 text-xs font-semibold">
+              <div><label className="block text-slate-500 mb-1">Subject Code *</label><input type="text" required placeholder="e.g. IT 301" value={newSubjectRecord.subjectCode} onChange={e => setNewSubjectRecord({...newSubjectRecord, subjectCode: e.target.value})} className="w-full border p-2.5 rounded-xl outline-none"/></div>
+              <div><label className="block text-slate-500 mb-1">Descriptive Title</label><input type="text" placeholder="e.g. Advanced Networks" value={newSubjectRecord.subjectTitle} onChange={e => setNewSubjectRecord({...newSubjectRecord, subjectTitle: e.target.value})} className="w-full border p-2.5 rounded-xl outline-none"/></div>
+              <div className="grid grid-cols-2 gap-3">
+                <div><label className="block text-slate-500 mb-1">Units *</label><input type="number" min={1} max={5} required value={newSubjectRecord.units} onChange={e => setNewSubjectRecord({...newSubjectRecord, units: e.target.value})} className="w-full border p-2.5 rounded-xl outline-none"/></div>
+                <div>
+                  <label className="block text-slate-500 mb-1">Target Semester</label>
+                  <select value={newSubjectRecord.semester} onChange={e => setNewSubjectRecord({...newSubjectRecord, semester: e.target.value})} className="w-full border p-2.5 rounded-xl outline-none bg-white font-medium">
+                    {SEMESTER_LIST.map(s => <option key={s} value={s}>{s}</option>)}
+                  </select>
+                </div>
+              </div>
+              <div className="flex justify-end gap-2 pt-4 border-t">
+                <button type="button" onClick={() => setIsManageModalOpen(false)} className="px-4 py-2 border rounded-xl text-slate-500 hover:bg-slate-50">Cancel</button>
+                <button type="submit" className="bg-blue-600 text-white px-4 py-2 rounded-xl">Append Node</button>
               </div>
             </form>
           </div>

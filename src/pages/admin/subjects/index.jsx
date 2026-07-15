@@ -1,537 +1,578 @@
-import { useState, useEffect, useRef } from "react";
-import { createPortal } from "react-dom";
-import {
-	BookOpen,
-	CheckCircle,
-	Loader2,
-	Plus,
-	X,
-	Search,
-	CalendarDays,
-	Trash2,
-	ChevronDown,
-	Pencil,
-} from "lucide-react";
+import React, { useState, useEffect } from 'react';
 import { subjectService } from "../../../services/subjectService";
+import { Plus, Layers, BookOpen, GraduationCap, Edit2, Archive, Info } from 'lucide-react'; 
 
-export default function AdminSubjectsPage() {
-	const [subjects, setSubjects] = useState([]);
-	const [loading, setLoading] = useState(true);
-	const [searchQuery, setSearchQuery] = useState("");
+export default function CurriculumBuilder() {
+  const [subjects, setSubjects] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedCurriculum, setSelectedCurriculum] = useState('New Curriculum'); 
 
-	// Modal states
-	const [isModalOpen, setIsModalOpen] = useState(false);
-	const [isSubmitting, setIsSubmitting] = useState(false);
-	const [formData, setFormData] = useState({
-		id: "",
-		courseTitle: "",
-		creditUnits: 3,
-		prerequisites: [],
-		semesterOffered: [],
-	});
+  // --- MANAGEMENT STATES ---
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingSubject, setEditingSubject] = useState(null);
+  const [formData, setFormData] = useState({
+    courseCode: '',
+    courseTitle: '',
+    creditUnits: 3,
+    lectureHours: 2,
+    labHours: 3,
+    yearLevel: 'First Year',
+    semesterOffered: ['First Semester'],
+    prerequisites: [], 
+    equivalencies: [], 
+    track: 'Common',
+    isArchived: false
+  });
 
-	// Multi-select dropdown states
-	const [isDropdownOpen, setIsDropdownOpen] = useState(false);
-	const [prereqSearch, setPrereqSearch] = useState("");
-	const [dropdownPosition, setDropdownPosition] = useState({
-		top: 0,
-		left: 0,
-		width: 0,
-	});
-	const dropdownRef = useRef(null);
-	const triggerRef = useRef(null);
+  const [curriculumMappings] = useState([
+    { id: "map1", courseTitle: "Computer Programming", newCourseCode: "CC_101" },
+    { id: "map2", courseTitle: "Introduction to Computing", newCourseCode: "CC_100" },
+    { id: "map3", courseTitle: "Advanced Computer Programming", newCourseCode: "CC_102" }
+  ]);
 
-	useEffect(() => {
-		const loadSubjects = async () => {
-			try {
-				const liveSubjects = await subjectService.getAllSubjects();
-				console.log("=== FIRESTORE FETCH DEBUG ===");
-				console.log("Fetched subjects:", liveSubjects);
-				console.log("Subject count:", liveSubjects.length);
-				console.log("Subject details:", JSON.stringify(liveSubjects, null, 2));
-				setSubjects(liveSubjects);
-			} catch (error) {
-				console.error("=== FIRESTORE FETCH ERROR ===");
-				console.error("Failed to fetch subjects:", error);
-				console.error("Error details:", JSON.stringify(error, null, 2));
-				setSubjects([]);
-			} finally {
-				setLoading(false);
-			}
-		};
-		loadSubjects();
-	}, []);
+  useEffect(() => {
+    loadSubjects();
+  }, [selectedCurriculum]);
 
-	// Close dropdown when clicking outside
-	useEffect(() => {
-		const handleClickOutside = (event) => {
-			if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
-				setIsDropdownOpen(false);
-			}
-		};
-		document.addEventListener("mousedown", handleClickOutside);
-		return () => document.removeEventListener("mousedown", handleClickOutside);
-	}, []);
+  const loadSubjects = async () => {
+    setLoading(true);
+    try {
+      const data = await subjectService.getAllSubjects(selectedCurriculum);
+      setSubjects(data || []);
+    } catch (err) {
+      console.error("Error loading subjects:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-	const handleInputChange = (e) => {
-		const { name, value } = e.target;
-		setFormData((prev) => ({ ...prev, [name]: value }));
-	};
+  // --- AUTOMATION: Code ↔ Title Sync ---
+  const handleCodeChange = (codeVal) => {
+    const cleanCode = codeVal.trim().toUpperCase();
+    let computedTitle = formData.courseTitle;
+    
+    const foundMatch = subjects.find(s => s.courseCode.toUpperCase() === cleanCode);
+    if (foundMatch) {
+      computedTitle = foundMatch.courseTitle;
+    } else {
+      const mappedRef = curriculumMappings.find(m => m.newCourseCode.replace("_", " ").toUpperCase() === cleanCode || m.newCourseCode.toUpperCase() === cleanCode);
+      if (mappedRef) computedTitle = mappedRef.courseTitle;
+    }
 
-	const handleSemesterToggle = (semester) => {
-		setFormData((prev) => {
-			const currentSemesters = prev.semesterOffered || [];
-			if (currentSemesters.includes(semester)) {
-				return {
-					...prev,
-					semesterOffered: currentSemesters.filter((s) => s !== semester),
-				};
-			} else {
-				return { ...prev, semesterOffered: [...currentSemesters, semester] };
-			}
-		});
-	};
+    setFormData(prev => ({
+      ...prev,
+      courseCode: codeVal,
+      courseTitle: computedTitle
+    }));
+  };
 
-	const handlePrereqToggle = (courseCode) => {
-		setFormData((prev) => {
-			const currentPrereqs = prev.prerequisites || [];
-			if (currentPrereqs.includes(courseCode)) {
-				return {
-					...prev,
-					prerequisites: currentPrereqs.filter((p) => p !== courseCode),
-				};
-			} else {
-				return { ...prev, prerequisites: [...currentPrereqs, courseCode] };
-			}
-		});
-	};
+  const handleTitleChange = (titleVal) => {
+    let computedCode = formData.courseCode;
+    const foundMatch = subjects.find(s => s.courseTitle.toLowerCase() === titleVal.toLowerCase());
+    
+    if (foundMatch) {
+      computedCode = foundMatch.courseCode;
+    } else {
+      const mappedRef = curriculumMappings.find(m => m.courseTitle.toLowerCase() === titleVal.toLowerCase());
+      if (mappedRef) computedCode = mappedRef.newCourseCode.replace("_", " ");
+    }
 
-	const handleEditSubject = (subject) => {
-		setFormData({
-			id: subject.id,
-			courseTitle: subject.courseTitle,
-			creditUnits: subject.creditUnits,
-			prerequisites: subject.prerequisites || [],
-			semesterOffered: subject.semesterOffered || [],
-		});
-		setIsModalOpen(true);
-	};
+    setFormData(prev => ({
+      ...prev,
+      courseTitle: titleVal,
+      courseCode: computedCode
+    }));
+  };
 
-	const handleAddSubject = async (e) => {
-		e.preventDefault();
-		if (!formData.id || !formData.courseTitle)
-			return alert("Course Code and Title are required.");
-		if (formData.semesterOffered.length === 0)
-			return alert("Please select at least one semester.");
+  const getYearLabel = (sub) => {
+    const rawYear = sub.yearLevel || "";
+    if (rawYear.includes("1") || rawYear.toLowerCase().includes("first")) return "Year 1";
+    if (rawYear.includes("2") || rawYear.toLowerCase().includes("second")) return "Year 2";
+    if (rawYear.includes("3") || rawYear.toLowerCase().includes("third")) return "Year 3";
+    if (rawYear.includes("4") || rawYear.toLowerCase().includes("fourth")) return "Year 4";
+    return "Year 1";
+  };
 
-		setIsSubmitting(true);
-		try {
-			// TODO: Implement circular dependency validation
-			const payload = {
-				id: formData.id,
-				courseTitle: formData.courseTitle,
-				creditUnits: Number(formData.creditUnits),
-				prerequisites: formData.prerequisites,
-				semesterOffered: formData.semesterOffered,
-			};
+  const getSemesterLabel = (sub) => {
+    const semArray = sub.semesterOffered || [];
+    const firstSemValue = semArray[0] || "";
+    const lowerVal = firstSemValue.toLowerCase();
+    
+    if (lowerVal.includes("2nd") || lowerVal.includes("second") || lowerVal.includes("2")) return "Semester 2";
+    if (lowerVal.includes("midterm") || lowerVal.includes("midyear") || lowerVal.includes("summer")) return "Midterm";
+    return "Semester 1";
+  };
 
-			const newSubject = await subjectService.addSubject(payload);
+  const openAddModal = () => {
+    setEditingSubject(null);
+    setFormData({
+      courseCode: '',
+      courseTitle: '',
+      creditUnits: 3,
+      lectureHours: 2,
+      labHours: 3,
+      yearLevel: 'First Year',
+      semesterOffered: ['First Semester'],
+      prerequisites: [],
+      equivalencies: [],
+      track: 'Common',
+      isArchived: false
+    });
+    setIsModalOpen(true);
+  };
 
-			setSubjects((prev) => {
-				const exists = prev.find((s) => s.id === newSubject.id);
-				if (exists)
-					return prev.map((s) => (s.id === newSubject.id ? newSubject : s));
-				return [newSubject, ...prev];
-			});
+  const openEditModal = (subject) => {
+    setEditingSubject(subject);
+    const dynamicEquiv = curriculumMappings
+      .filter(m => m.newCourseCode.toUpperCase() === subject.courseCode.replace(" ", "_").toUpperCase())
+      .map(m => `${m.courseTitle} (${m.newCourseCode})`);
 
-			setIsModalOpen(false);
-			setFormData({
-				id: "",
-				courseTitle: "",
-				creditUnits: 3,
-				prerequisites: [],
-				semesterOffered: [],
-			});
-			setPrereqSearch("");
-		} catch (error) {
-			console.error("Failed to add subject:", error);
-			alert("Failed to save subject.");
-		} finally {
-			setIsSubmitting(false);
-		}
-	};
+    setFormData({
+      courseCode: subject.courseCode || '',
+      courseTitle: subject.courseTitle || '',
+      creditUnits: subject.creditUnits || 3,
+      lectureHours: subject.lectureHours || 2,
+      labHours: subject.labHours || 3,
+      yearLevel: subject.yearLevel || 'First Year',
+      semesterOffered: subject.semesterOffered || ['First Semester'],
+      prerequisites: Array.isArray(subject.prerequisites) ? subject.prerequisites : [subject.prerequisites || '-'],
+      equivalencies: dynamicEquiv.length > 0 ? dynamicEquiv : (subject.equivalencies || []),
+      track: subject.track || 'Common',
+      isArchived: subject.isArchived || false
+    });
+    setIsModalOpen(true);
+  };
 
-	const filteredSubjects = subjects.filter(
-		(sub) =>
-			(sub.courseTitle?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-			sub.id.toLowerCase().includes(searchQuery.toLowerCase())) &&
-			!(!sub.courseTitle && !sub.id) // Filter out invalid subjects
-	);
+  const handleFormSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      if (editingSubject) {
+        await subjectService.updateSubject(editingSubject.id, formData);
+      } else {
+        await subjectService.addSubject(formData);
+      }
+      setIsModalOpen(false);
+      loadSubjects();
+    } catch (err) {
+      console.error("Persistent save error:", err);
+    }
+  };
 
-	// Debug filtering
-	console.log("=== FILTERING DEBUG ===");
-	console.log("Total subjects:", subjects.length);
-	console.log("Search query:", searchQuery);
-	console.log("Filtered subjects:", filteredSubjects.length);
-	console.log("All subjects:", subjects);
-	console.log("Filtered subjects:", filteredSubjects);
+  const handleToggleArchive = async (subject) => {
+    const updatedStatus = !subject.isArchived;
+    if (confirm(`Are you sure you want to ${updatedStatus ? 'Archive' : 'Restore'} ${subject.courseCode}?`)) {
+      try {
+        await subjectService.updateSubject(subject.id, { ...subject, isArchived: updatedStatus });
+        loadSubjects();
+      } catch (err) {
+        console.error("Archiving processing error:", err);
+      }
+    }
+  };
 
-	if (loading) {
-		return (
-			<div className="flex justify-center items-center h-64 text-[#375534]">
-				<Loader2 className="animate-spin" size={32} />
-			</div>
-		);
-	}
+  const getNewCurriculumGrouped = () => {
+    const grouped = {};
+    subjects.filter(sub => !sub.isArchived).forEach(sub => {
+      const year = getYearLabel(sub);
+      const semester = getSemesterLabel(sub);
 
-	return (
-		<div className="space-y-6 text-[#0F2A1D]">
-			<div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-				<div>
-					<h2 className="text-3xl font-extrabold tracking-tight text-[#0F2A1D]">
-						Subjects
-					</h2>
-					<p className="text-xs text-slate-400 font-medium mt-1 uppercase tracking-wider">
-						Manage curriculum courses and prerequisites
-					</p>
-				</div>
-				<div className="flex gap-3 w-full sm:w-auto">
-					<div className="relative flex-1 sm:w-64">
-						<Search
-							className="absolute left-3.5 top-3 text-slate-400"
-							size={15}
-						/>
-						<input
-							type="text"
-							value={searchQuery}
-							onChange={(e) => setSearchQuery(e.target.value)}
-							placeholder="Search subjects..."
-							className="w-full border border-slate-200 bg-white pl-10 pr-3 py-2.5 rounded-xl text-xs font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#375534]/20"
-						/>
-					</div>
-					<button
-						onClick={() => {
-							setFormData({
-								id: "",
-								courseTitle: "",
-								creditUnits: 3,
-								prerequisites: [],
-								semesterOffered: [],
-							});
-							setPrereqSearch("");
-							setIsModalOpen(true);
-						}}
-						className="flex items-center gap-2 bg-[#7D1924] text-[#FCEEEF] text-xs font-bold uppercase tracking-wider px-5 py-2.5 rounded-xl hover:bg-[#962230] transition-all shadow-sm shrink-0"
-					>
-						<Plus size={16} /> Add Subject
-					</button>
-				</div>
-			</div>
+      if (!grouped[year]) grouped[year] = {};
+      if (!grouped[year][semester]) grouped[year][semester] = [];
+      grouped[year][semester].push(sub);
+    });
+    return grouped;
+  };
 
-			<div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-				{filteredSubjects.map((item) => (
-					<div
-						key={item.id}
-						className="bg-white rounded-3xl p-6 border border-slate-200/80 shadow-sm flex flex-col justify-between hover:border-[#375534]/30 transition-colors"
-					>
-						<div className="space-y-3">
-							<div className="flex justify-between items-start">
-								<div className="inline-flex items-center justify-center p-2.5 bg-slate-50 text-slate-500 rounded-xl">
-									<BookOpen size={18} className="stroke-[2.5]" />
-								</div>
-								<div className="flex items-center gap-2">
-									<span className="px-2.5 py-1 bg-[#f4f7f4] text-[#375534] text-[10px] font-black uppercase tracking-wider rounded-lg border border-[#375534]/10">
-										{item.creditUnits} Units
-									</span>
-									<button
-										onClick={() => handleEditSubject(item)}
-										className="text-slate-400 hover:text-[#375534] transition-colors p-1"
-									>
-										<Pencil size={16} />
-									</button>
-								</div>
-							</div>
+  const getOldCurriculumStructured = () => {
+    const commonYears = { "Year 1": {}, "Year 2": {} };
+    const trackedYears = {
+      "Business Analytics": { "Year 3": {}, "Year 4": {} },
+      "Service Management": { "Year 3": {}, "Year 4": {} },
+      "Networking Technology": { "Year 3": {}, "Year 4": {} }
+    };
 
-							<div>
-								<h3 className="text-xl font-black text-slate-900 tracking-tight leading-tight">
-									{item.courseTitle}
-								</h3>
-								<p className="text-xs font-mono font-bold text-[#375534] mt-1.5 uppercase tracking-wide">
-									{item.id}
-								</p>
-								{item.semesterOffered && (
-									<div className="flex flex-wrap gap-1.5 mt-3">
-										{item.semesterOffered.map((sem) => (
-											<span
-												key={sem}
-												className="flex items-center gap-1 px-2 py-1 bg-blue-50 text-blue-700 text-[9px] font-black uppercase tracking-wider rounded-lg border border-blue-100"
-											>
-												<CalendarDays size={10} /> {sem}
-											</span>
-										))}
-									</div>
-								)}
-							</div>
-						</div>
+    subjects.filter(sub => !sub.isArchived).forEach(sub => {
+      const year = getYearLabel(sub);
+      const semester = getSemesterLabel(sub);
 
-						<div className="mt-5 pt-5 border-t border-slate-100">
-							{!item.prerequisites || item.prerequisites.length === 0 ? (
-								<div className="flex items-center gap-1.5 text-emerald-700 font-black text-xs bg-emerald-50/50 border border-emerald-100/40 p-2.5 rounded-xl">
-									<CheckCircle size={14} className="stroke-[2.5]" /> Open
-									Sequence
-								</div>
-							) : (
-								<div className="space-y-2">
-									<p className="text-xs text-slate-600 font-semibold leading-relaxed">
-										Requires:
-									</p>
-									<div className="flex flex-wrap gap-1.5">
-										{item.prerequisites.map((codeItem) => (
-											<span
-												key={codeItem}
-												className="font-mono text-[10px] font-black bg-rose-50 text-rose-700 border border-rose-100 px-2 py-0.5 rounded-md"
-											>
-												{codeItem}
-											</span>
-										))}
-									</div>
-								</div>
-							)}
-						</div>
-					</div>
-				))}
-			</div>
+      if (year === "Year 1" || year === "Year 2") {
+        if (!commonYears[year][semester]) commonYears[year][semester] = [];
+        commonYears[year][semester].push(sub);
+      } else if (year === "Year 3" || year === "Year 4") {
+        const rawTrack = sub.track || "";
+        const matchedTracks = Object.keys(trackedYears).filter(trackKey => {
+          const keyNormalized = trackKey.toLowerCase();
+          const dbNormalized = rawTrack.toLowerCase();
+          return dbNormalized.includes(keyNormalized) || 
+                 (keyNormalized === "networking technology" && dbNormalized.includes("networking"));
+        });
 
-			{isModalOpen && (
-				<div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4">
-					<div className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden max-h-[90vh] flex flex-col">
-						<div className="bg-[#7D1924] text-[#FCEEEF] p-5 flex justify-between items-center shrink-0">
-							<h3 className="text-sm font-black uppercase tracking-wider">
-								{formData.id ? "Edit Subject" : "Add New Subject"}
-							</h3>
-							<button
-								onClick={() => {
-									setIsModalOpen(false);
-									setFormData({
-										id: "",
-										courseTitle: "",
-										creditUnits: 3,
-										prerequisites: [],
-										semesterOffered: [],
-									});
-									setPrereqSearch("");
-								}}
-								className="text-[#AEC3B0] hover:text-white"
-							>
-								<X size={18} />
-							</button>
-						</div>
-						<form
-							onSubmit={handleAddSubject}
-							className="p-6 space-y-4 text-xs font-bold text-slate-600 overflow-y-auto"
-						>
-							<div>
-								<label className="block uppercase tracking-wider mb-1.5 text-slate-400">
-									Course Code *
-								</label>
-								<input
-									type="text"
-									name="id"
-									required
-									value={formData.id}
-									onChange={handleInputChange}
-									className="w-full border border-slate-200 bg-slate-50 p-3 rounded-xl uppercase text-slate-800"
-								/>
-							</div>
-							<div>
-								<label className="block uppercase tracking-wider mb-1.5 text-slate-400">
-									Course Title *
-								</label>
-								<input
-									type="text"
-									name="courseTitle"
-									required
-									value={formData.courseTitle}
-									onChange={handleInputChange}
-									className="w-full border border-slate-200 bg-slate-50 p-3 rounded-xl text-slate-800"
-								/>
-							</div>
-							<div>
-								<label className="block uppercase tracking-wider mb-1.5 text-slate-400">
-									Credit Units *
-								</label>
-								<input
-									type="number"
-									name="creditUnits"
-									min="1"
-									max="10"
-									required
-									value={formData.creditUnits}
-									onChange={handleInputChange}
-									className="w-full border border-slate-200 bg-slate-50 p-3 rounded-xl text-slate-800"
-								/>
-							</div>
-							<div ref={dropdownRef}>
-								<label className="block uppercase tracking-wider mb-1.5 text-slate-400">
-									Prerequisites (Optional)
-								</label>
-								<div className="relative">
-									<div
-										ref={triggerRef}
-										className="w-full border border-slate-200 bg-slate-50 p-3 rounded-xl cursor-pointer min-h-[50px]"
-										onClick={() => {
-											if (triggerRef.current) {
-												const rect = triggerRef.current.getBoundingClientRect();
-												setDropdownPosition({
-													top: rect.bottom + window.scrollY,
-													left: rect.left + window.scrollX,
-													width: rect.width,
-												});
-											}
-											setIsDropdownOpen(!isDropdownOpen);
-										}}
-									>
-										{formData.prerequisites.length === 0 ? (
-											<span className="text-slate-400">
-												Select prerequisites...
-											</span>
-										) : (
-											<div className="flex flex-wrap gap-1">
-												{formData.prerequisites.map((code) => (
-													<span
-														key={code}
-														className="inline-flex items-center gap-1 px-2 py-1 bg-[#f4f7f4] text-[#375534] text-[10px] font-black uppercase tracking-wider rounded-md border border-[#375534]/20"
-													>
-														{code}
-														<button
-															type="button"
-															onClick={(e) => {
-																e.stopPropagation();
-																handlePrereqToggle(code);
-															}}
-															className="text-[#375534] hover:text-rose-600"
-														>
-															<X size={10} />
-														</button>
-													</span>
-												))}
-											</div>
-										)}
-										<ChevronDown
-											size={16}
-											className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400"
-										/>
-									</div>
-								</div>
-							</div>
-							{isDropdownOpen &&
-								createPortal(
-									<div
-										ref={dropdownRef}
-										style={{
-											position: "absolute",
-											top: dropdownPosition.top,
-											left: dropdownPosition.left,
-											width: dropdownPosition.width,
-											zIndex: 9999,
-										}}
-										className="bg-white border border-slate-200 rounded-xl shadow-lg max-h-60 overflow-y-auto"
-									>
-										<input
-											type="text"
-											value={prereqSearch}
-											onChange={(e) => setPrereqSearch(e.target.value)}
-											placeholder="Search subjects..."
-											className="w-full p-3 border-b border-slate-200 text-xs text-slate-800 focus:outline-none"
-											autoFocus
-										/>
-										{(() => {
-											console.log("Dropdown subjects:", subjects);
-											const availableSubjects = subjects.filter(
-												(s) => s.id !== formData.id,
-											);
-											console.log(
-												"Available subjects (excluding self):",
-												availableSubjects,
-											);
-											const filtered = availableSubjects.filter(
-												(s) =>
-													s.id
-														.toLowerCase()
-														.includes(prereqSearch.toLowerCase()) ||
-													s.courseTitle
-														.toLowerCase()
-														.includes(prereqSearch.toLowerCase()),
-											);
-											console.log("Filtered subjects:", filtered);
+        const finalTracks = matchedTracks.length > 0 ? matchedTracks : Object.keys(trackedYears);
+        finalTracks.forEach(trackKey => {
+          if (!trackedYears[trackKey][year][semester]) {
+            trackedYears[trackKey][year][semester] = [];
+          }
+          trackedYears[trackKey][year][semester].push(sub);
+        });
+      }
+    });
 
-											if (availableSubjects.length === 0) {
-												return (
-													<div className="p-3 text-xs text-slate-400 text-center">
-														No subjects available yet.
-													</div>
-												);
-											}
+    return { commonYears, trackedYears };
+  };
 
-											if (filtered.length === 0) {
-												return (
-													<div className="p-3 text-xs text-slate-400 text-center">
-														No matching subjects.
-													</div>
-												);
-											}
+  // --- PRESENTATION BADGE MATCHERS ---
+  const getTypeBadgeClass = (subject) => {
+    const trackVal = (subject.track || '').toLowerCase();
+    if (trackVal !== 'common' && trackVal !== '') {
+      return 'bg-blue-50 text-blue-600 border border-blue-200 text-[11px] font-bold px-2.5 py-0.5 rounded-full shadow-2xs';
+    }
+    const code = (subject.courseCode || '').toUpperCase();
+    if (code.startsWith('GE')) return 'bg-amber-50 text-amber-600 border border-amber-200 text-[11px] font-bold px-2.5 py-0.5 rounded-full shadow-2xs';
+    if (code.startsWith('NSTP')) return 'bg-slate-50 text-slate-500 border border-slate-200 text-[11px] font-bold px-2.5 py-0.5 rounded-full shadow-2xs';
+    return 'bg-emerald-50 text-emerald-600 border border-emerald-200 text-[11px] font-bold px-2.5 py-0.5 rounded-full shadow-2xs';
+  };
 
-											return filtered.map((subject) => (
-												<div
-													key={subject.id}
-													className={`p-3 cursor-pointer text-xs ${formData.prerequisites.includes(subject.id) ? "bg-[#f4f7f4] text-[#375534]" : "hover:bg-slate-50"}`}
-													onClick={() => handlePrereqToggle(subject.id)}
-												>
-													{subject.id} - {subject.courseTitle}
-												</div>
-											));
-										})()}
-									</div>,
-									document.body,
-								)}
-							<div>
-								<label className="block uppercase tracking-wider mb-2 text-slate-400">
-									Term Availability *
-								</label>
-								<div className="grid grid-cols-2 gap-2">
-									{["1st Semester", "2nd Semester", "Summer Term"].map(
-										(sem) => (
-											<label
-												key={sem}
-												className={`flex items-center gap-2 p-2.5 border rounded-xl cursor-pointer ${formData.semesterOffered.includes(sem) ? "bg-[#f4f7f4] border-[#375534]/40 text-[#375534]" : "bg-slate-50 border-slate-200"}`}
-											>
-												<input
-													type="checkbox"
-													checked={formData.semesterOffered.includes(sem)}
-													onChange={() => handleSemesterToggle(sem)}
-													className="w-4 h-4 text-[#375534]"
-												/>
-												{sem}
-											</label>
-										),
-									)}
-								</div>
-							</div>
-							<button
-								type="submit"
-								disabled={isSubmitting}
-								className="w-full bg-[#7D1924] text-[#FCEEEF] py-3 rounded-xl hover:bg-[#962230] transition-all flex items-center justify-center"
-							>
-								{isSubmitting ? (
-									<Loader2 className="animate-spin" size={16} />
-								) : (
-									"Save Subject"
-								)}
-							</button>
-						</form>
-					</div>
-				</div>
-			)}
-		</div>
-	);
+  const getTypeLabel = (subject) => {
+    const trackVal = (subject.track || '').toLowerCase();
+    if (trackVal !== 'common' && trackVal !== '') return subject.track;
+    const code = (subject.courseCode || '').toUpperCase();
+    if (code.startsWith('GE')) return 'GE';
+    if (code.startsWith('NSTP')) return 'NSTP';
+    return 'Core';
+  };
+
+  // Sub-component Helper: Renders Semester Card
+  const renderSemesterCard = (semKey, items, isOldCurriculum = false) => {
+    if (items.length === 0 && semKey === "Midterm") return null;
+    const totalUnits = items.reduce((sum, item) => sum + (Number(item.creditUnits) || 0), 0);
+    
+    return (
+      <div key={semKey} className="bg-white border border-slate-200/60 rounded-xl shadow-xs p-6 mb-6">
+        <div className="flex justify-between items-center mb-6">
+          <h3 className="font-extrabold text-slate-900 text-md tracking-tight">{semKey}</h3>
+          <span className="text-xs font-bold text-slate-700 bg-slate-100/80 border border-slate-200/60 px-3 py-1 rounded-full shadow-2xs">
+            {totalUnits} Units
+          </span>
+        </div>
+
+        {items.length === 0 ? (
+          <div className="text-center py-8 text-xs text-slate-400 italic font-medium">No scheduled courses.</div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs text-slate-700">
+              <thead>
+                <tr className="text-[10px] text-slate-400/90 font-bold uppercase tracking-wider border-b border-slate-100 pb-3">
+                  <th className="pb-3 w-[15%]">Code</th>
+                  <th className="pb-3 w-[35%]">Title</th>
+                  <th className="pb-3 text-center w-[10%]">Units</th>
+                  <th className="pb-3 w-[25%]">Prerequisites</th>
+                  {!isOldCurriculum && <th className="pb-3 text-center w-[12%]">Type</th>}
+                  <th className="pb-3 text-right w-[8%]">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100/70 font-semibold">
+                {items.map((sub) => {
+                  const prereqsArray = Array.isArray(sub.prerequisites) 
+                    ? sub.prerequisites 
+                    : (sub.prerequisites ? [sub.prerequisites] : []);
+                  const cleanedPrereqs = prereqsArray.filter(p => p && p !== '-');
+
+                  return (
+                    <tr key={sub.id || sub.courseCode} className="hover:bg-slate-50/40 transition-colors">
+                      <td className="py-4 font-extrabold text-slate-950">{sub.courseCode}</td>
+                      <td className="py-4 text-slate-600 font-medium">{sub.courseTitle}</td>
+                      <td className="py-4 text-center text-slate-950 font-extrabold">{sub.creditUnits}</td>
+                      <td className="py-4">
+                        {cleanedPrereqs.length > 0 ? (
+                          <div className="flex flex-wrap gap-1.5">
+                            {cleanedPrereqs.map((prereq, index) => (
+                              <span key={index} className="bg-slate-100 text-slate-700 text-[10px] font-bold px-2 py-0.5 rounded border border-slate-200/60 shadow-2xs">
+                                {prereq}
+                              </span>
+                            ))}
+                          </div>
+                        ) : (
+                          <span className="text-slate-400 font-medium text-[11px] italic">None</span>
+                        )}
+                      </td>
+                      {!isOldCurriculum && (
+                        <td className="py-4 text-center">
+                          <span className={getTypeBadgeClass(sub)}>
+                            {getTypeLabel(sub)}
+                          </span>
+                        </td>
+                      )}
+                      <td className="py-4 text-right">
+                        <div className="flex justify-end gap-1.5 text-slate-300">
+                          <button 
+                            onClick={() => openEditModal(sub)}
+                            className="p-1 hover:text-blue-600 transition-colors"
+                            title="Edit Subject"
+                          >
+                            <Edit2 size={14} />
+                          </button>
+                          <button 
+                            onClick={() => handleToggleArchive(sub)}
+                            className="p-1 hover:text-rose-600 transition-colors"
+                            title="Archive Subject"
+                          >
+                            <Archive size={14} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const oldData = getOldCurriculumStructured();
+
+  return (
+    <div className="min-h-screen bg-slate-50/40 text-slate-800 p-8 font-sans antialiased">
+      {/* Header */}
+      <div className="max-w-7xl mx-auto flex flex-col md:flex-row md:items-center md:justify-between border-b border-slate-200 pb-5 mb-6">
+        <div>
+          <h1 className="text-2xl font-black tracking-tight text-slate-950">Curriculum Builder</h1>
+          <p className="text-xs text-slate-500 mt-0.5 flex items-center gap-1.5 font-medium">
+            <Info size={13} className="text-slate-400" />
+            Batangas State University College of Informatics and Computing Sciences[cite: 2]
+          </p>
+        </div>
+        <div className="flex gap-3 mt-4 md:mt-0">
+          <button 
+            onClick={openAddModal}
+            className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 text-white rounded-xl text-xs font-bold hover:bg-blue-700 transition-colors shadow-xs"
+          >
+            <Plus size={15} />
+            Add New Subject
+          </button>
+        </div>
+      </div>
+
+      {/* Tabs Layout */}
+      <div className="max-w-7xl mx-auto flex mb-8 border-b border-slate-200">
+        <div className="flex gap-1 -mb-px">
+          <button 
+            onClick={() => setSelectedCurriculum('New Curriculum')}
+            className={`px-5 py-2.5 text-xs font-bold tracking-wide transition-all border-b-2 ${selectedCurriculum === 'New Curriculum' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-400 hover:text-slate-600'}`}
+          >
+            New Curriculum Layout
+          </button>
+          <button 
+            onClick={() => setSelectedCurriculum('Old Curriculum')}
+            className={`px-5 py-2.5 text-xs font-bold tracking-wide transition-all border-b-2 ${selectedCurriculum === 'Old Curriculum' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-400 hover:text-slate-600'}`}
+          >
+            Old Curriculum Structure
+          </button>
+        </div>
+      </div>
+
+      {/* Workspace Wrapper */}
+      <div className="max-w-7xl mx-auto">
+        {loading ? (
+          <div className="text-center py-20 text-slate-400 text-xs font-medium">Loading curriculum schedules...</div>
+        ) : subjects.length === 0 ? (
+          <div className="text-center py-20 text-slate-400 text-xs font-medium border-2 border-dashed border-slate-200 rounded-2xl">
+            No active subjects mapped to this structure.
+          </div>
+        ) : selectedCurriculum === 'Old Curriculum' ? (
+          <div className="space-y-12">
+            {/* Old Curriculum Layout blocks */}
+            <div className="space-y-6">
+              <div className="flex items-center gap-2 pb-1 border-b border-slate-200">
+                <BookOpen className="text-slate-500" size={16} />
+                <h2 className="text-md font-extrabold text-slate-950 tracking-tight">Common General Core (Years 1 & 2)</h2>
+              </div>
+              {Object.entries(oldData.commonYears).map(([year, semesters]) => (
+                <div key={year} className="space-y-2">
+                  <h3 className="text-sm font-bold text-slate-900 px-1 mt-2">{year}</h3>
+                  {["Semester 1", "Semester 2", "Midterm"].map((semKey) => 
+                    renderSemesterCard(semKey, semesters[semKey] || [], true)
+                  )}
+                </div>
+              ))}
+            </div>
+
+            <div className="space-y-8">
+              <div className="flex items-center gap-2 pb-1 border-b border-slate-200">
+                <Layers className="text-blue-600" size={16} />
+                <h2 className="text-md font-extrabold text-slate-950 tracking-tight">Specialization Track Blocks (Years 3 & 4)</h2>
+              </div>
+              {Object.entries(oldData.trackedYears).map(([trackName, years]) => (
+                <div key={trackName} className="border border-slate-200 rounded-2xl bg-slate-50/40 p-5 space-y-4">
+                  <div className="flex items-center gap-2 pb-2 border-b border-slate-200/60">
+                    <GraduationCap className="text-blue-600" size={18} />
+                    <h3 className="text-sm font-black text-slate-950 tracking-tight">{trackName} Track Spec</h3>
+                  </div>
+                  {Object.entries(years).map(([year, semesters]) => (
+                    <div key={year} className="space-y-2">
+                      <h4 className="text-[10px] font-bold uppercase tracking-wider text-slate-400 px-1">{year}</h4>
+                      {["Semester 1", "Semester 2", "Midterm"].map((semKey) => 
+                        renderSemesterCard(semKey, semesters[semKey] || [], true)
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : (
+          /* New Curriculum Frame (Full width stacks) */
+          <div className="space-y-10">
+            {Object.entries(getNewCurriculumGrouped())
+              .sort(([a], [b]) => a.localeCompare(b))
+              .map(([year, semesters]) => (
+                <div key={year} className="space-y-3">
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="w-1.5 h-4 bg-blue-600 rounded-xs" />
+                    <h2 className="text-md font-extrabold text-slate-950">{year} Master Schedule</h2>
+                  </div>
+                  {["Semester 1", "Semester 2", "Midterm"].map((semKey) => 
+                    renderSemesterCard(semKey, semesters[semKey] || [], false)
+                  )}
+                </div>
+              ))}
+          </div>
+        )}
+      </div>
+
+      {/* FORM DIALOG POPUP PANEL */}
+      {isModalOpen && (
+        <div className="fixed inset-0 bg-slate-950/20 backdrop-blur-xs flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-xl border border-slate-200 max-h-[90vh] overflow-y-auto">
+            <h3 className="text-base font-bold text-slate-950 mb-4">
+              {editingSubject ? `Modify Subject: ${formData.courseCode}` : 'Register New Academic Course'}
+            </h3>
+            
+            <form onSubmit={handleFormSubmit} className="space-y-4 text-xs font-semibold text-slate-600">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-slate-500 mb-1">Target Year Level</label>
+                  <select 
+                    value={formData.yearLevel} 
+                    onChange={(e) => setFormData({...formData, yearLevel: e.target.value})}
+                    className="w-full border border-slate-200 rounded-lg px-3 py-2 bg-white text-xs font-medium outline-none"
+                  >
+                    <option value="First Year">First Year</option>
+                    <option value="Second Year">Second Year</option>
+                    <option value="Third Year">Third Year</option>
+                    <option value="Fourth Year">Fourth Year</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-slate-500 mb-1">Target Assigned Semester</label>
+                  <select 
+                    value={formData.semesterOffered[0]} 
+                    onChange={(e) => setFormData({...formData, semesterOffered: [e.target.value]})}
+                    className="w-full border border-slate-200 rounded-lg px-3 py-2 bg-white text-xs font-medium outline-none"
+                  >
+                    <option value="First Semester">First Semester</option>
+                    <option value="Second Semester">Second Semester</option>
+                    <option value="Midterm">Midterm Term</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-slate-500 mb-1">Course Code</label>
+                <input 
+                  type="text" 
+                  value={formData.courseCode}
+                  onChange={(e) => handleCodeChange(e.target.value)}
+                  placeholder="e.g. CC 101" 
+                  className="w-full border border-slate-200 rounded-lg px-3 py-2 outline-none uppercase font-medium" 
+                  required 
+                />
+              </div>
+
+              <div>
+                <label className="block text-slate-500 mb-1">Course Official Title</label>
+                <input 
+                  type="text" 
+                  value={formData.courseTitle}
+                  onChange={(e) => handleTitleChange(e.target.value)}
+                  placeholder="e.g. Computer Programming" 
+                  className="w-full border border-slate-200 rounded-lg px-3 py-2 outline-none font-medium" 
+                  required 
+                />
+              </div>
+
+              <div className="grid grid-cols-3 gap-2">
+                <div>
+                  <label className="block text-slate-500 mb-1">Credit Units</label>
+                  <input type="number" value={formData.creditUnits} onChange={(e) => setFormData({...formData, creditUnits: Number(e.target.value)})} className="w-full border border-slate-200 rounded-lg px-3 py-1.5 font-medium outline-none" />
+                </div>
+                <div>
+                  <label className="block text-slate-500 mb-1">Lec Hours</label>
+                  <input type="number" value={formData.lectureHours} onChange={(e) => setFormData({...formData, lectureHours: Number(e.target.value)})} className="w-full border border-slate-200 rounded-lg px-3 py-1.5 font-medium outline-none" />
+                </div>
+                <div>
+                  <label className="block text-slate-500 mb-1">Lab Hours</label>
+                  <input type="number" value={formData.labHours} onChange={(e) => setFormData({...formData, labHours: Number(e.target.value)})} className="w-full border border-slate-200 rounded-lg px-3 py-1.5 font-medium outline-none" />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-slate-500 mb-1">Prerequisites (Comma Separated)</label>
+                <input 
+                  type="text" 
+                  value={formData.prerequisites.join(', ')} 
+                  onChange={(e) => setFormData({...formData, prerequisites: e.target.value.split(',').map(v => v.trim())})}
+                  placeholder="e.g. CC 100, CC 101" 
+                  className="w-full border border-slate-200 rounded-lg px-3 py-2 font-medium outline-none" 
+                />
+              </div>
+
+              <div>
+                <label className="block text-slate-500 mb-1">Evaluation Credit Mappings Reference</label>
+                <input 
+                  type="text" 
+                  value={formData.equivalencies.join('; ')} 
+                  disabled
+                  placeholder="Transferee mappings derived from database rules..." 
+                  className="w-full border border-slate-100 rounded-lg px-3 py-2 bg-slate-50 text-slate-400 font-normal cursor-not-allowed" 
+                />
+              </div>
+
+              <div>
+                <label className="block text-slate-500 mb-1">Track Curricular Binding</label>
+                <select 
+                  value={formData.track} 
+                  onChange={(e) => setFormData({...formData, track: e.target.value})}
+                  className="w-full border border-slate-200 rounded-lg px-3 py-2 bg-white text-xs font-medium outline-none"
+                >
+                  <option value="Common">Common (Core / All Tracks)</option>
+                  <option value="Business Analytics">Business Analytics Only</option>
+                  <option value="Networking">Networking Technology Only</option>
+                  <option value="Service Management">Service Management Only</option>
+                </select>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-4 border-t border-slate-100">
+                <button 
+                  type="button" 
+                  onClick={() => setIsModalOpen(false)}
+                  className="px-4 py-2 border border-slate-200 rounded-xl text-slate-600 hover:bg-slate-50 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button 
+                  type="submit" 
+                  className="px-4 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors"
+                >
+                  Save Subject
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
