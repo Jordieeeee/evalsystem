@@ -21,7 +21,19 @@ const CLASSIFICATIONS = ['regular', 'irregular'];
 const COURSE_LIST = ['BSIT', 'BSCS', 'BSEMC', 'BSIS'];
 const SECTION_LIST = ['A', 'B', 'C', 'D'];
 const SEMESTER_LIST = ['1st Semester', '2nd Semester', 'Summer'];
-const ACADEMIC_YEARS_LIST = ['2026-2027', '2027-2028', '2028-2029', '2029-2030'];
+
+// Generate academic year range from 2020-2021 through 2050-2051 (reversed: newest first)
+const generateAcademicYears = () => {
+  const startYear = 2020;
+  const endYear = 2050;
+  const years = [];
+  for (let year = endYear; year >= startYear; year--) {
+    years.push(`${year}-${year + 1}`);
+  }
+  return years;
+};
+
+const ACADEMIC_YEARS_LIST = generateAcademicYears();
 
 export default function StudentManagement() {
   // --- APPLICATION DATA STATES ---
@@ -108,6 +120,50 @@ export default function StudentManagement() {
       }
     }
   }, [editStudentForm.yearLevel]);
+
+  // Side Effect: Auto-set Academic Year and Curriculum based on Admission Type (NEW STUDENT FORM)
+  useEffect(() => {
+    if (newStudent.admissionType === 'Freshman') {
+      // For Freshman: lock to 2026-2027, NEW curriculum, First Year, and 1st Semester
+      setNewStudent(prev => ({
+        ...prev,
+        academicYear: '2026-2027',
+        curriculum: 'NEW',
+        yearLevel: 'First Year',
+        semester: '1st Semester'
+      }));
+    } else if (['Transferee', 'Shiftee', 'Returnee'].includes(newStudent.admissionType)) {
+      // For Transferee/Shiftee/Returnee: auto-set curriculum based on academic year
+      const startYear = parseInt(newStudent.academicYear.split('-')[0], 10);
+      const resolvedCurriculum = startYear <= 2025 ? 'OLD' : 'NEW';
+      setNewStudent(prev => ({
+        ...prev,
+        curriculum: resolvedCurriculum
+      }));
+    }
+  }, [newStudent.admissionType, newStudent.academicYear]);
+
+  // Side Effect: Auto-set Academic Year and Curriculum based on Admission Type (EDIT STUDENT FORM)
+  useEffect(() => {
+    if (editStudentForm.admissionType === 'Freshman') {
+      // For Freshman: lock to 2026-2027, NEW curriculum, First Year, and 1st Semester
+      setEditStudentForm(prev => ({
+        ...prev,
+        academicYear: '2026-2027',
+        curriculum: 'NEW',
+        yearLevel: 'First Year',
+        semester: '1st Semester'
+      }));
+    } else if (['Transferee', 'Shiftee', 'Returnee'].includes(editStudentForm.admissionType)) {
+      // For Transferee/Shiftee/Returnee: auto-set curriculum based on academic year
+      const startYear = parseInt(editStudentForm.academicYear.split('-')[0], 10);
+      const resolvedCurriculum = startYear <= 2025 ? 'OLD' : 'NEW';
+      setEditStudentForm(prev => ({
+        ...prev,
+        curriculum: resolvedCurriculum
+      }));
+    }
+  }, [editStudentForm.admissionType, editStudentForm.academicYear]);
 
   // --- 1. STREAM LIVE STUDENTS FROM FIRESTORE ---
   useEffect(() => {
@@ -363,8 +419,14 @@ export default function StudentManagement() {
     }
 
     const startYear = parseInt(newStudent.academicYear.split('-')[0], 10);
-    if (isNaN(startYear) || startYear < 2026) {
-      showToast("Cannot assign records to past academic years prior to 2026.", "error");
+    if (isNaN(startYear)) {
+      showToast("Invalid academic year format.", "error");
+      return;
+    }
+    
+    // Freshman admission type guard: must be current academic year (2026-2027) or later
+    if (newStudent.admissionType === 'Freshman' && startYear < 2026) {
+      showToast("Freshman students cannot be admitted into academic years prior to 2026-2027.", "error");
       return;
     }
 
@@ -412,8 +474,14 @@ export default function StudentManagement() {
     }
 
     const startYear = parseInt(editStudentForm.academicYear.split('-')[0], 10);
-    if (isNaN(startYear) || startYear < 2026) {
-      showToast("Cannot assign records to terms prior to 2026.", "error");
+    if (isNaN(startYear)) {
+      showToast("Invalid academic year format.", "error");
+      return;
+    }
+    
+    // Freshman admission type guard: must be current academic year (2026-2027) or later
+    if (editStudentForm.admissionType === 'Freshman' && startYear < 2026) {
+      showToast("Freshman students cannot be admitted into academic years prior to 2026-2027.", "error");
       return;
     }
 
@@ -859,8 +927,16 @@ export default function StudentManagement() {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Year Level Placement *</label>
-                  <select value={newStudent.yearLevel} onChange={e => setNewStudent({...newStudent, yearLevel: e.target.value})} className="w-full bg-slate-50 border rounded-xl p-2.5 text-xs font-semibold outline-none">
+                  <label className="block text-xs font-bold text-slate-400 uppercase mb-1 flex items-center gap-1">
+                    Year Level Placement *
+                    {newStudent.admissionType === 'Freshman' && <Lock size={12} className="text-slate-400" />}
+                  </label>
+                  <select 
+                    disabled={newStudent.admissionType === 'Freshman'}
+                    value={newStudent.yearLevel} 
+                    onChange={e => setNewStudent({...newStudent, yearLevel: e.target.value})} 
+                    className={`w-full ${newStudent.admissionType === 'Freshman' ? 'bg-slate-100 text-slate-500 border-slate-100 cursor-not-allowed shadow-none' : 'bg-slate-50 border-slate-200'} border rounded-xl p-2.5 text-xs font-semibold outline-none`}
+                  >
                     <option value="First Year">First Year</option>
                     <option value="Second Year">Second Year</option>
                     <option value="Third Year">Third Year</option>
@@ -868,8 +944,16 @@ export default function StudentManagement() {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Assigned Semester Target *</label>
-                  <select value={newStudent.semester} onChange={e => setNewStudent({...newStudent, semester: e.target.value})} className="w-full bg-slate-50 border rounded-xl p-2.5 text-xs font-semibold outline-none">
+                  <label className="block text-xs font-bold text-slate-400 uppercase mb-1 flex items-center gap-1">
+                    Assigned Semester Target *
+                    {newStudent.admissionType === 'Freshman' && <Lock size={12} className="text-slate-400" />}
+                  </label>
+                  <select 
+                    disabled={newStudent.admissionType === 'Freshman'}
+                    value={newStudent.semester} 
+                    onChange={e => setNewStudent({...newStudent, semester: e.target.value})} 
+                    className={`w-full ${newStudent.admissionType === 'Freshman' ? 'bg-slate-100 text-slate-500 border-slate-100 cursor-not-allowed shadow-none' : 'bg-slate-50 border-slate-200'} border rounded-xl p-2.5 text-xs font-semibold outline-none`}
+                  >
                     {SEMESTER_LIST.map(s => <option key={s} value={s}>{s}</option>)}
                   </select>
                 </div>
@@ -894,20 +978,32 @@ export default function StudentManagement() {
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Curriculum Version Profile</label>
-                  <select value={newStudent.curriculum} onChange={e => setNewStudent({...newStudent, curriculum: e.target.value})} className="w-full bg-slate-50 border rounded-xl p-2.5 text-xs font-bold outline-none text-blue-600">
+                  <label className="block text-xs font-bold text-slate-400 uppercase mb-1 flex items-center gap-1">
+                    Curriculum Version Profile
+                    <Lock size={12} className="text-slate-400" />
+                  </label>
+                  <select 
+                    disabled
+                    value={newStudent.curriculum} 
+                    onChange={e => setNewStudent({...newStudent, curriculum: e.target.value})} 
+                    className="w-full bg-slate-100 text-slate-500 border border-slate-100 rounded-xl p-2.5 text-xs font-bold outline-none cursor-not-allowed shadow-none"
+                  >
                     <option value="NEW">New Curriculum</option>
                     <option value="OLD">Old Curriculum</option>
                   </select>
                 </div>
-                
+                 
                 {/* Dynamic Academic Year Dropdown Selection Matrix */}
                 <div>
-                  <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Academic Year *</label>
+                  <label className="block text-xs font-bold text-slate-400 uppercase mb-1 flex items-center gap-1">
+                    Academic Year *
+                    {newStudent.admissionType === 'Freshman' && <Lock size={12} className="text-slate-400" />}
+                  </label>
                   <select 
+                    disabled={newStudent.admissionType === 'Freshman'}
                     value={newStudent.academicYear} 
                     onChange={e => setNewStudent({...newStudent, academicYear: e.target.value})} 
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs font-semibold outline-none"
+                    className={`w-full ${newStudent.admissionType === 'Freshman' ? 'bg-slate-100 text-slate-500 border-slate-100 cursor-not-allowed shadow-none' : 'bg-slate-50 text-slate-900 border-slate-200'} border rounded-xl p-2.5 text-xs font-semibold outline-none`}
                   >
                     {ACADEMIC_YEARS_LIST.map(year => (
                       <option key={year} value={year}>{year}</option>
@@ -1035,21 +1131,44 @@ export default function StudentManagement() {
               
               <div className="grid grid-cols-2 gap-3 text-xs font-semibold">
                 <div>
-                  <label className="block text-slate-500 mb-1">Academic Year *</label>
-                  <select value={editStudentForm.academicYear} onChange={e=>setEditStudentForm({...editStudentForm, academicYear: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-sm outline-none">
+                  <label className="block text-slate-500 mb-1 flex items-center gap-1">Academic Year *
+                    {editStudentForm.admissionType === 'Freshman' && <Lock size={12} className="text-slate-400" />}
+                  </label>
+                  <select 
+                    disabled={editStudentForm.admissionType === 'Freshman'}
+                    value={editStudentForm.academicYear} 
+                    onChange={e=>setEditStudentForm({...editStudentForm, academicYear: e.target.value})} 
+                    className={`w-full ${editStudentForm.admissionType === 'Freshman' ? 'bg-slate-100 text-slate-400 border-slate-100 cursor-not-allowed shadow-none' : 'bg-slate-50 border-slate-200'} border rounded-xl p-2.5 text-sm outline-none`}
+                  >
                     {ACADEMIC_YEARS_LIST.map(year => <option key={year} value={year}>{year}</option>)}
                   </select>
                 </div>
-                <div><label className="block text-slate-500 mb-1">Semester</label>
-                  <select value={editStudentForm.semester} onChange={e=>setEditStudentForm({...editStudentForm, semester: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-sm">
+                <div>
+                  <label className="block text-slate-500 mb-1 flex items-center gap-1">Semester
+                    {editStudentForm.admissionType === 'Freshman' && <Lock size={12} className="text-slate-400" />}
+                  </label>
+                  <select 
+                    disabled={editStudentForm.admissionType === 'Freshman'}
+                    value={editStudentForm.semester} 
+                    onChange={e=>setEditStudentForm({...editStudentForm, semester: e.target.value})} 
+                    className={`w-full ${editStudentForm.admissionType === 'Freshman' ? 'bg-slate-100 text-slate-400 border-slate-100 cursor-not-allowed shadow-none' : 'bg-slate-50 border-slate-200'} border rounded-xl p-2.5 text-sm outline-none`}
+                  >
                     {SEMESTER_LIST.map(sem => <option key={sem} value={sem}>{sem}</option>)}
                   </select>
                 </div>
               </div>
 
               <div className="grid grid-cols-3 gap-3">
-                <div><label className="block text-xs font-bold text-slate-55 uppercase mb-1">Year Level</label>
-                  <select value={editStudentForm.yearLevel} onChange={e => setEditStudentForm({...editStudentForm, yearLevel: e.target.value})} className="w-full bg-white border rounded-xl p-2.5 text-sm focus:outline-none cursor-pointer">
+                <div>
+                  <label className="block text-xs font-bold text-slate-55 uppercase mb-1 flex items-center gap-1">Year Level
+                    {editStudentForm.admissionType === 'Freshman' && <Lock size={12} className="text-slate-400" />}
+                  </label>
+                  <select 
+                    disabled={editStudentForm.admissionType === 'Freshman'}
+                    value={editStudentForm.yearLevel} 
+                    onChange={e => setEditStudentForm({...editStudentForm, yearLevel: e.target.value})} 
+                    className={`w-full ${editStudentForm.admissionType === 'Freshman' ? 'bg-slate-100 text-slate-400 border-slate-100 cursor-not-allowed shadow-none' : 'bg-white border-slate-200'} border rounded-xl p-2.5 text-sm focus:outline-none cursor-pointer`}
+                  >
                     <option value="First Year">First Year</option>
                     <option value="Second Year">Second Year</option>
                     <option value="Third Year">Third Year</option>
@@ -1073,6 +1192,19 @@ export default function StudentManagement() {
                   <label className="block mb-1">Admission Type *</label>
                   <select value={editStudentForm.admissionType} onChange={e=>setEditStudentForm({...editStudentForm, admissionType: e.target.value})} className="w-full border rounded-xl p-2.5 outline-none bg-white font-medium">
                     {ADMISSION_TYPES.map(type => <option key={type} value={type}>{type}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="block mb-1 flex items-center gap-1">Curriculum Version Profile
+                    <Lock size={12} className="text-slate-400" />
+                  </label>
+                  <select 
+                    disabled
+                    value={editStudentForm.curriculum} 
+                    className="w-full bg-slate-100 text-slate-500 border border-slate-100 rounded-xl p-2.5 text-sm outline-none cursor-not-allowed shadow-none font-medium"
+                  >
+                    <option value="NEW">New Curriculum</option>
+                    <option value="OLD">Old Curriculum</option>
                   </select>
                 </div>
               </div>
