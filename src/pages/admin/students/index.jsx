@@ -15,7 +15,7 @@ import {
 import { checkEnrollmentLimit, getFallbackSubjects, normalizeYear, normalizeSemester, MAX_UNITS_CONFIG } from '../../../services/curriculumConfig';
 
 const BATSTATEU_GRADES = ['1.00', '1.25', '1.50', '1.75', '2.00', '2.25', '2.50', '2.75', '3.00', '5.00', 'Inc', 'Drop', 'W'];
-const ADMISSION_TYPES = ['freshman', 'transferee', 'shiftee'];
+const ADMISSION_TYPES = ['Freshman', 'Transferee', 'Shiftee', 'Returnee'];
 const ENROLLMENT_STATUSES = ['active', 'inactive', 'graduated', 'loa', 'transferred out'];
 const CLASSIFICATIONS = ['regular', 'irregular'];
 const COURSE_LIST = ['BSIT', 'BSCS', 'BSEMC', 'BSIS'];
@@ -75,13 +75,13 @@ export default function StudentManagement() {
   const [newStudent, setNewStudent] = useState({
     studentId: '', email: '', firstName: '', middleInitial: '', lastName: '',
     course: 'BSIT', track: '', curriculum: 'NEW', yearLevel: 'First Year', semester: '1st Semester',
-    section: 'A', admissionType: 'freshman', classification: 'regular', status: 'active', academicYear: '2026-2027',
+    section: 'A', admissionType: 'Freshman', classification: 'regular', status: 'active', academicYear: '2026-2027',
     phoneNumber: '', guardianContact: '', admissionDate: new Date().toISOString().split('T')[0], photoUrl: ''
   });
 
   const [editStudentForm, setEditStudentForm] = useState({
     firstName: '', middleInitial: '', lastName: '', email: '', course: 'BSIT', track: '',
-    curriculum: 'NEW', yearLevel: 'First Year', semester: '1st Semester', section: 'A', admissionType: 'freshman', classification: 'regular', status: 'active', academicYear: '2026-2027',
+    curriculum: 'NEW', yearLevel: 'First Year', semester: '1st Semester', section: 'A', admissionType: 'Freshman', classification: 'regular', status: 'active', academicYear: '2026-2027',
     phoneNumber: '', guardianContact: '', admissionDate: '', photoUrl: ''
   });
 
@@ -345,7 +345,7 @@ export default function StudentManagement() {
         status: isCompleted ? 'EVALUATED' : 'DEFICIENT',
         grade: isCompleted ? matchedRecord.grade : '-',
         prereqs: prereqsArray.filter(p => p && p !== '-'),
-        prereqsMet: prerequisitesMet, // <-- FIXED: Pointed to correctly declared variable name
+        prereqsMet: prerequisitesMet, 
         missingPrereqs
       });
     });
@@ -399,7 +399,7 @@ export default function StudentManagement() {
       setNewStudent({
         studentId: '', email: '', firstName: '', middleInitial: '', lastName: '',
         course: 'BSIT', track: '', curriculum: 'NEW', yearLevel: 'First Year', semester: '1st Semester',
-        section: 'A', admissionType: 'freshman', classification: 'regular', status: 'active', academicYear: '2026-2027'
+        section: 'A', admissionType: 'Freshman', classification: 'regular', status: 'active', academicYear: '2026-2027'
       });
     } catch (err) { showToast("Failed to write student parameters.", "error"); }
   };
@@ -467,7 +467,7 @@ export default function StudentManagement() {
       await updateDoc(doc(db, 'studentSubjects', subjectId), { grade: selectedInlineGrade, status: statusText, recordedAt: new Date().toISOString() });
       setGradingSubjectId(null);
       showToast("Grade updated successfully!");
-    } catch (err) { showToast("Failed to write grade.", "error"); }
+    } catch (err) { showToast("Failed to record grade.", "error"); }
   };
 
   const checkSrCodeUniqueness = async (srCode) => {
@@ -566,7 +566,7 @@ export default function StudentManagement() {
                   <select value={filterCurriculum} onChange={e=>setFilterCurriculum(e.target.value)} className="w-full bg-slate-50 border rounded-xl p-2 font-medium text-slate-600 outline-none"><option value="All">All Curriculums</option><option value="NEW">New Curriculum</option><option value="OLD">Old Curriculum</option></select>
                 </div>
                 <div><label className="mb-1 block uppercase">Admission Type</label>
-                  <select value={filterAdmission} onChange={e=>setFilterAdmission(e.target.value)} className="w-full bg-slate-50 border rounded-xl p-2 font-medium text-slate-600 outline-none"><option value="All">All Admissions</option><option value="freshman">Freshman</option><option value="transferee">Transferee</option><option value="shiftee">Shiftee</option></select>
+                  <select value={filterAdmission} onChange={e=>setFilterAdmission(e.target.value)} className="w-full bg-slate-50 border rounded-xl p-2 font-medium text-slate-600 outline-none"><option value="All">All Admissions</option>{ADMISSION_TYPES.map(a => <option key={a} value={a}>{a}</option>)}</select>
                 </div>
                 <div><label className="mb-1 block uppercase">Classification</label>
                   <select value={filterClassification} onChange={e=>setFilterClassification(e.target.value)} className="w-full bg-slate-50 border rounded-xl p-2 font-medium text-slate-600 outline-none"><option value="All">All Classifications</option><option value="regular">Regular</option><option value="irregular">Irregular</option></select>
@@ -914,6 +914,20 @@ export default function StudentManagement() {
                     ))}
                   </select>
                 </div>
+
+                {/* Admission Type Dropdown Implementation Selection Block */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Admission Type *</label>
+                  <select 
+                    value={newStudent.admissionType} 
+                    onChange={e => setNewStudent({...newStudent, admissionType: e.target.value})} 
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs font-semibold outline-none"
+                  >
+                    {ADMISSION_TYPES.map(type => (
+                      <option key={type} value={type}>{type}</option>
+                    ))}
+                  </select>
+                </div>
               </div>
             </div>
 
@@ -1050,6 +1064,15 @@ export default function StudentManagement() {
                 <div><label className="block text-xs font-bold text-slate-55 uppercase mb-1">Classification</label>
                   <select value={editStudentForm.classification} onChange={e => setEditStudentForm({...editStudentForm, classification: e.target.value})} className="w-full bg-white border rounded-xl p-2.5 text-sm cursor-pointer">
                     {CLASSIFICATIONS.map(c => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 text-xs font-semibold">
+                <div>
+                  <label className="block mb-1">Admission Type *</label>
+                  <select value={editStudentForm.admissionType} onChange={e=>setEditStudentForm({...editStudentForm, admissionType: e.target.value})} className="w-full border rounded-xl p-2.5 outline-none bg-white font-medium">
+                    {ADMISSION_TYPES.map(type => <option key={type} value={type}>{type}</option>)}
                   </select>
                 </div>
               </div>
