@@ -33,5 +33,29 @@ service cloud.firestore {
       allow read: if isSignedIn();
       allow write: if isAdmin() || request.resource.data.studentId == request.auth.uid;
     }
+
+    // Curriculum catalogs and the old -> new equivalency registry.
+    match /new_subjects/{subjectId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    match /old_subjects/{subjectId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    match /curriculum_mappings/{oldCourseCode} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    // Finalized evaluations are locked, timestamped snapshots. They may be created
+    // and read, never edited or removed — a correction is a new evaluation record.
+    match /evaluation_history/{evaluationId} {
+      allow read: if isSignedIn();
+      allow create: if isAdmin();
+      allow update, delete: if false;
+    }
   }
 }

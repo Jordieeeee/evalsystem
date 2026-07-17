@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { 
   X, Printer, FileText, LayoutDashboard, ShieldAlert, Award, Sparkles, ClipboardList, CheckCircle2, History, AlertTriangle, User, Calendar, RefreshCw, Check, Ban
 } from 'lucide-react';
 import { evaluationService } from '../../../services/evaluationService';
 import { studentService } from '../../../services/studentService';
+import { useAuth } from '../../../context/AuthContext';
 
 // --- CONFIG & UTILS IMPORT ---
 import { MAX_UNITS_CONFIG, normalizeYear, normalizeSemester } from '../../../services/curriculumConfig';
@@ -23,9 +24,14 @@ import DashboardOverview from './components/DashboardOverview';
 import GraduationPipelineView from './components/GraduationPipelineView';
 import TransfereeShifteeView from './components/TransfereeShifteeView';
 import GeneralWorkspaceView from './components/GeneralWorkspaceView';
+import CurriculumShiftView from './components/CurriculumShiftView';
+import CourseEntryPanel from './components/CourseEntryPanel';
+import TransferReviewPanel from './components/TransferReviewPanel';
+import { createEntryRow, validateEntries } from './utils/courseEntryValidation';
 import PrintReportModal from './components/PrintReportModal';
 
 export default function AdminEvaluationPage() {
+  const { user } = useAuth();
   // --- CORE MODULE VIEW LAYER MANAGER ---
   const [moduleView, setModuleView] = useState('workspace'); // 'dashboard' | 'workspace' | 'history-logs'
 
@@ -34,6 +40,7 @@ export default function AdminEvaluationPage() {
   const [students, setStudents] = useState([]);
   const [newSubjectsCatalog, setNewSubjectsCatalog] = useState([]);
   const [oldSubjectsCatalog, setOldSubjectsCatalog] = useState([]);
+  const [curriculumMappings, setCurriculumMappings] = useState({});
   const [auditTrails, setAuditTrailLogs] = useState([]);
 
   // --- SELECTED STUDENT ASSESSMENT TARGET STATES ---
@@ -50,6 +57,21 @@ export default function AdminEvaluationPage() {
 
   // --- UI TOGGLE VISIBILITY CONTROLS ---
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Guards the finalize action against a duplicate write once a locked snapshot
+  // has been committed for this student + pipeline pairing.
+  const [finalizedSnapshotKey, setFinalizedSnapshotKey] = useState('');
+
+  // --- PLAN BRIDGING: ADMIN-KEYED TRANSCRIPT + ON-DEMAND EVALUATION ---
+  // Unlike the other tracks, plan bridging does not evaluate on every render: the
+  // admin keys in the transcript, runs the engine, reviews the transfers, then
+  // confirms. `bridgingRun` freezes the transcript at Run time so later edits
+  // cannot silently change a result already on screen.
+  const [bridgingEntries, setBridgingEntries] = useState([createEntryRow()]);
+  const [bridgingRun, setBridgingRun] = useState(null);
+  const [bridgingOverrides, setBridgingOverrides] = useState({ rejectedMatches: [], manualTransfers: {} });
+  const [transfersConfirmed, setTransfersConfirmed] = useState(false);
+  const [isEvaluating, setIsEvaluating] = useState(false);
 
   // --- REPORT GENERATION SUMMARY PREVIEWS ---
   const [activeReportData, setActiveReportData] = useState(null);
@@ -130,12 +152,17 @@ export default function AdminEvaluationPage() {
       snapshot.forEach((doc) => { list.push({ id: doc.id, ...doc.data() }); });
       setOldSubjectsCatalog(list);
     });
+    const unsubMappings = onSnapshot(collection(db, 'curriculum_mappings'), (snapshot) => {
+      const mappingObj = {};
+      snapshot.forEach((doc) => { mappingObj[doc.id] = doc.data(); });
+      setCurriculumMappings(mappingObj);
+    });
     const unsubAudit = onSnapshot(collection(db, 'evaluation_history'), (snapshot) => {
       const list = [];
       snapshot.forEach((doc) => { list.push({ id: doc.id, ...doc.data() }); });
       setAuditTrailLogs(list.sort((a, b) => b.evaluationDate.localeCompare(a.evaluationDate)));
     });
-    return () => { unsubNew(); unsubOld(); unsubAudit(); };
+    return () => { unsubNew(); unsubOld(); unsubMappings(); unsubAudit(); };
   }, []);
 
   // Compute Dashboard Statistics dynamically
@@ -205,6 +232,11 @@ export default function AdminEvaluationPage() {
     const val = e.target.value;
     setSelectedStudentId(val);
     setManualOverrides({});
+    // The keyed transcript belongs to the previous student: never carry it across.
+    setBridgingEntries([createEntryRow()]);
+    setBridgingRun(null);
+    setBridgingOverrides({ rejectedMatches: [], manualTransfers: {} });
+    setTransfersConfirmed(false);
     if (!val) {
       setStudentSubjectsHistory([]);
       setRegistrarRemarks('');
@@ -232,15 +264,98 @@ export default function AdminEvaluationPage() {
     setManualOverrides(updated);
   };
 
+  const evaluationSnapshotKey = `${selectedStudentId}::${evaluationStrategy}`;
+  const isCurrentEvaluationFinalized = Boolean(selectedStudentId) && finalizedSnapshotKey === evaluationSnapshotKey;
+
+  // --- PHASE 1 -> PHASE 2 TRIGGER ---
+  const bridgingValidation = validateEntries(bridgingEntries, newSubjectsCatalog, oldSubjectsCatalog);
+
+  // The engine is a pure function of (frozen transcript + overrides), so it can
+  // re-run on every transfer decision to preview the result live.
+  const bridgingResult = useMemo(() => {
+    if (!bridgingRun || !selectedStudentData) return null;
+    try {
+      return runCurriculumShiftEvaluation({
+        newSubjectsCatalog,
+        oldSubjectsCatalog,
+        curriculumMappings,
+        enteredCourses: bridgingRun,
+        studentData: selectedStudentData,
+        overrides: bridgingOverrides,
+        creditBoundary: { min: minAllowedUnits, max: maxAllowedUnits }
+      });
+    } catch (err) {
+      console.error('Curriculum shift evaluation failed:', err);
+      return null;
+    }
+  }, [bridgingRun, bridgingOverrides, newSubjectsCatalog, oldSubjectsCatalog, curriculumMappings, selectedStudentData, minAllowedUnits, maxAllowedUnits]);
+
+  // Entries edited after a run leave the displayed result stale. Finalizing a stale
+  // result would record a snapshot that disagrees with the transcript on screen.
+  const stripRow = ({ courseCode, courseTitle, grade, units, academicYear, semester }) =>
+    ({ courseCode, courseTitle, grade, units: Number(units) || 0, academicYear, semester });
+  const isBridgingStale = Boolean(bridgingRun) &&
+    JSON.stringify(bridgingEntries.map(stripRow)) !== JSON.stringify(bridgingRun.map(stripRow));
+
+  const handleRunBridgingEvaluation = () => {
+    if (!selectedStudentData || !bridgingValidation.isValid) return;
+    setIsEvaluating(true);
+    try {
+      // A fresh run discards prior transfer decisions: they referenced the old transcript.
+      setBridgingRun(bridgingEntries.map((row) => ({ ...row })));
+      setBridgingOverrides({ rejectedMatches: [], manualTransfers: {} });
+      setTransfersConfirmed(false);
+    } finally {
+      setIsEvaluating(false);
+    }
+  };
+
+  // --- PHASE 3 HANDLERS ---
+  // Any change to a credit decision invalidates the confirmation: the plan below
+  // is derived from these decisions and must be re-confirmed.
+  const handleRejectMatch = (newCode) => {
+    setBridgingOverrides((prev) => ({
+      ...prev,
+      rejectedMatches: prev.rejectedMatches.includes(newCode) ? prev.rejectedMatches : [...prev.rejectedMatches, newCode]
+    }));
+    setTransfersConfirmed(false);
+  };
+
+  const handleRestoreMatch = (newCode) => {
+    setBridgingOverrides((prev) => ({
+      ...prev,
+      rejectedMatches: prev.rejectedMatches.filter((c) => c !== newCode)
+    }));
+    setTransfersConfirmed(false);
+  };
+
+  const handleTransferChange = (oldCode, target) => {
+    setBridgingOverrides((prev) => {
+      const manualTransfers = { ...prev.manualTransfers };
+      if (!target) delete manualTransfers[oldCode];
+      else manualTransfers[oldCode] = target;
+      return { ...prev, manualTransfers };
+    });
+    setTransfersConfirmed(false);
+  };
+
   const handleFinalizeEvaluationMatrix = async () => {
     if (!selectedStudentId || !auditOutput) return;
+    if (isCurrentEvaluationFinalized) return;
+    if (evaluationStrategy === 'curr-shift' && isBridgingStale) {
+      return alert('The transcript has changed since this evaluation was run. Re-run the evaluation before finalizing.');
+    }
+    if (evaluationStrategy === 'curr-shift' && !transfersConfirmed) {
+      return alert('Confirm the transfer decisions before finalizing this evaluation.');
+    }
     setIsSubmitting(true);
     try {
       const timestamp = new Date().toISOString();
-      
+
       const payload = {
         evaluationDate: timestamp,
-        evaluatedBy: "Registrar Executive Terminal Office",
+        evaluatedBy: user?.email || "Registrar Executive Terminal Office",
+        finalizedBy: { uid: user?.uid || null, email: user?.email || null },
         evaluationType: strategyLabel(evaluationStrategy),
         studentId: selectedStudentId,
         result: auditOutput.overallEligibility,
@@ -250,8 +365,41 @@ export default function AdminEvaluationPage() {
         prevSchool: evaluationStrategy === 'transferee' ? prevSchoolName : 'Batangas State University',
         prevProgram: evaluationStrategy === 'shiftee' ? selectedStudentData?.program || 'BSIT (Software Engineering)' : prevProgram,
         newProgram: evaluationStrategy === 'shiftee' ? newShifteeProgram : null,
-        manualOverrides: manualOverrides
+        manualOverrides: manualOverrides,
+        // Immutable once written: firestore.rules denies update/delete on evaluation_history.
+        isFinalized: true,
+        finalizedAt: timestamp
       };
+
+      // Plan bridging records the full classification as an auditable snapshot so the
+      // mapping decisions stay reconstructable even after the registry is re-edited.
+      // Courses come from the result, not live state, so the snapshot is self-consistent.
+      if (evaluationStrategy === 'curr-shift') {
+        payload.bridgingSnapshot = {
+          originCurriculum: auditOutput.originCurriculum,
+          curriculumStartYear: auditOutput.curriculumStartYear,
+          currentStanding: auditOutput.currentStanding || null,
+          enteredCourses: auditOutput.enteredCourses || [],
+          overrides: auditOutput.overrides || {},
+          unitsEarnedMapped: auditOutput.unitsEarned,
+          unitsDeficientRemaining: auditOutput.unitsRemaining,
+          totalRequiredUnits: auditOutput.totalRequiredUnits,
+          curriculumProgress: auditOutput.curriculumProgress,
+          creditBoundary: auditOutput.creditBoundary,
+          estimatedSemesters: auditOutput.estimatedSemesters,
+          projectedGraduation: auditOutput.projectedGraduation,
+          mappingStats: auditOutput.mappingStats || {},
+          creditedCourses: auditOutput.creditedList || [],
+          bridgeCourses: auditOutput.bridgeCourses || [],
+          gapCourses: auditOutput.gapCourses || [],
+          unmappedCourses: auditOutput.unmappedList || [],
+          misfiledEntries: auditOutput.misfiledEntries || [],
+          semesterPlan: auditOutput.semesterPlan || [],
+          unschedulableCourses: auditOutput.unschedulableCourses || [],
+          analysisLogs: auditOutput.analysisLogs || [],
+          reviewReasons: auditOutput.reviewReasons || []
+        };
+      }
 
       const studentProfileUpdates = {};
       
@@ -288,10 +436,11 @@ export default function AdminEvaluationPage() {
       }
 
       await addDoc(collection(db, 'evaluation_history'), payload);
-      
+      setFinalizedSnapshotKey(evaluationSnapshotKey);
+
       alert(`Evaluation completed. Student status finalized as: ${auditOutput.overallEligibility}. Student master record has been synchronized.`);
       await loadPageData();
-      setModuleView('dashboard');
+      if (evaluationStrategy !== 'curr-shift') setModuleView('dashboard');
     } catch (err) {
       console.error("Critical error in evaluation workflow submission:", err);
       alert("Failed to complete system evaluation flow.");
@@ -309,9 +458,12 @@ export default function AdminEvaluationPage() {
     setActiveReportData({
       type: typeLabel,
       studentId: selectedStudentId,
+      srCode: selectedStudentData.srCode || selectedStudentId,
       name: `${selectedStudentData.lastName}, ${selectedStudentData.firstName}`,
+      student: selectedStudentData,
       curriculum: selectedStudentData.curriculum,
       eligibility: auditOutput.overallEligibility,
+      evaluatedBy: user?.email || 'Office of the University Registrar',
       timestamp: new Date().toLocaleString(),
       summary: auditOutput,
       prevSchool: evaluationStrategy === 'shiftee' ? 'Batangas State University' : prevSchoolName,
@@ -354,6 +506,10 @@ export default function AdminEvaluationPage() {
       subjectStatuses[code] = { status: determinedStatus, grade: s.grade || '-', source: s.isManualEntry ? 'Transferred' : 'BSU' };
     });
 
+    // Plan bridging is admin-triggered and owns its full result shape, so it bypasses
+    // the generic post-processing below, which assumes the 'Not Taken' status vocabulary.
+    if (evaluationStrategy === 'curr-shift') return bridgingResult;
+
     let pipelineResult;
     if (evaluationStrategy === 'graduation') {
       pipelineResult = runGraduationEvaluation(catalog, subjectStatuses);
@@ -369,8 +525,6 @@ export default function AdminEvaluationPage() {
       );
     } else if (evaluationStrategy === 'shiftee') {
       pipelineResult = runShifteeEvaluation(catalog, subjectStatuses, passedCodes, selectedStudentData, newShifteeProgram);
-    } else if (evaluationStrategy === 'curr-shift') {
-      pipelineResult = runCurriculumShiftEvaluation(catalog, subjectStatuses);
     } else if (evaluationStrategy === 'returning') {
       pipelineResult = runReturningStudentEvaluation(catalog, subjectStatuses);
     } else {
@@ -798,8 +952,65 @@ export default function AdminEvaluationPage() {
             />
           )}
 
-          {selectedStudentData && evaluationStrategy !== 'transferee' && evaluationStrategy !== 'shiftee' && evaluationStrategy !== 'graduation' && auditOutput && (
-            <GeneralWorkspaceView 
+          {/* CURRICULUM SHIFT (PLAN BRIDGING): PHASE 1 ENTRY -> PHASE 2/3 RESULTS */}
+          {selectedStudentData && evaluationStrategy === 'curr-shift' && (
+            <div className="space-y-6">
+              <CourseEntryPanel
+                entries={bridgingEntries}
+                setEntries={setBridgingEntries}
+                oldSubjectsCatalog={oldSubjectsCatalog}
+                validation={bridgingValidation}
+                onRunEvaluation={handleRunBridgingEvaluation}
+                isEvaluating={isEvaluating}
+                hasResult={Boolean(bridgingResult)}
+              />
+
+              {isBridgingStale && (
+                <div className="bg-amber-50/50 border border-amber-200 text-amber-900 text-xs p-3 rounded-xl flex items-start gap-2.5">
+                  <AlertTriangle size={15} className="text-amber-600 shrink-0 mt-0.5" />
+                  <p className="font-semibold leading-relaxed">
+                    The transcript has changed since this evaluation was run. Re-run the evaluation to refresh the results before finalizing.
+                  </p>
+                </div>
+              )}
+
+              {/* PHASE 3: manual transfer review — gates the plan below */}
+              {auditOutput && (
+                <TransferReviewPanel
+                  auditOutput={auditOutput}
+                  overrides={bridgingOverrides}
+                  onRejectMatch={handleRejectMatch}
+                  onRestoreMatch={handleRestoreMatch}
+                  onTransferChange={handleTransferChange}
+                  onConfirmTransfers={() => setTransfersConfirmed(true)}
+                  transfersConfirmed={transfersConfirmed}
+                />
+              )}
+
+              {/* PHASES 4-7: released once credit decisions are locked */}
+              {auditOutput && transfersConfirmed && (
+                <CurriculumShiftView
+                  auditOutput={auditOutput}
+                  evaluationStrategy={evaluationStrategy}
+                  triggerReportModalOpen={handleTriggerReportModalOpen}
+                  handleFinalizeEvaluationMatrix={handleFinalizeEvaluationMatrix}
+                  isSubmitting={isSubmitting}
+                  isFinalized={isCurrentEvaluationFinalized}
+                  isStale={isBridgingStale}
+                />
+              )}
+
+              {auditOutput && !transfersConfirmed && (
+                <div className="text-center py-8 text-slate-400 font-semibold text-xs bg-slate-50 rounded-2xl border border-dashed border-slate-200">
+                  <ClipboardList className="mx-auto text-slate-300 mb-2" size={28} />
+                  <p>Confirm the transfer decisions above to generate the semester enrollment plan and evaluation summary.</p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {selectedStudentData && !['transferee', 'shiftee', 'graduation', 'curr-shift'].includes(evaluationStrategy) && auditOutput && (
+            <GeneralWorkspaceView
               auditOutput={auditOutput}
               minAllowedUnits={minAllowedUnits}
               maxAllowedUnits={maxAllowedUnits}

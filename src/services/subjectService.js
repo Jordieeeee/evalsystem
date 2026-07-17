@@ -163,12 +163,17 @@ export const subjectService = {
       return snapshot.docs.map(doc => {
         const data = doc.data();
         return {
-          id: doc.id, 
+          id: doc.id,
+          oldCourseCode: data.oldCourseCode || doc.id,
           courseTitle: data.courseTitle || '',
           newCourseCode: data.newCourseCode || '',
-          isCreditable: data.isCreditable !== undefined ? data.isCreditable : true, 
+          isCreditable: data.isCreditable !== undefined ? data.isCreditable : true,
           effectiveDate: data.effectiveDate || null,
-          curriculumVersion: data.curriculumVersion || 'v1.0'
+          curriculumVersion: data.curriculumVersion || 'v1.0',
+          // Mappings authored before plan bridging carry no type; they are full equivalencies.
+          equivalencyType: data.equivalencyType === 'partial' ? 'partial' : 'full',
+          bridgeCourseCode: data.bridgeCourseCode || null,
+          notes: data.notes || ''
         };
       });
     } catch (error) {
@@ -181,11 +186,16 @@ export const subjectService = {
   addCurriculumMapping: async (mappingData) => {
     const docRef = doc(db, "curriculum_mappings", mappingData.oldCourseCode);
     const payload = {
+      oldCourseCode: mappingData.oldCourseCode,
       courseTitle: mappingData.courseTitle,
       newCourseCode: mappingData.newCourseCode,
       isCreditable: mappingData.isCreditable ?? true,
       curriculumVersion: mappingData.curriculumVersion || 'v1.0',
-      effectiveDate: mappingData.effectiveDate || new Date().toISOString()
+      effectiveDate: mappingData.effectiveDate || new Date().toISOString(),
+      // 'partial' routes the course into the Bridge bucket for registrar review.
+      equivalencyType: mappingData.equivalencyType === 'partial' ? 'partial' : 'full',
+      bridgeCourseCode: mappingData.bridgeCourseCode || null,
+      notes: mappingData.notes || ''
     };
     await setDoc(docRef, payload);
     await subjectService.logAudit('CURRICULUM_UPDATED', mappingData.oldCourseCode, { payload }, mappingData.actionBy || 'Admin');

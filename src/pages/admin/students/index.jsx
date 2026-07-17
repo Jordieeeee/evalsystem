@@ -12,28 +12,16 @@ import {
 } from 'firebase/firestore';
 
 // --- CONFIG & UTILS IMPORT ---
-import { checkEnrollmentLimit, getFallbackSubjects, normalizeYear, normalizeSemester, MAX_UNITS_CONFIG } from '../../../services/curriculumConfig';
+import {
+  checkEnrollmentLimit, getFallbackSubjects, normalizeYear, normalizeSemester, MAX_UNITS_CONFIG,
+  BATSTATEU_GRADES, SEMESTER_LIST, ACADEMIC_YEARS_LIST
+} from '../../../services/curriculumConfig';
 
-const BATSTATEU_GRADES = ['1.00', '1.25', '1.50', '1.75', '2.00', '2.25', '2.50', '2.75', '3.00', '5.00', 'Inc', 'Drop', 'W'];
 const ADMISSION_TYPES = ['Freshman', 'Transferee', 'Shiftee', 'Returnee'];
 const ENROLLMENT_STATUSES = ['active', 'inactive', 'graduated', 'loa', 'transferred out'];
 const CLASSIFICATIONS = ['regular', 'irregular'];
 const COURSE_LIST = ['BSIT', 'BSCS', 'BSEMC', 'BSIS'];
 const SECTION_LIST = ['A', 'B', 'C', 'D'];
-const SEMESTER_LIST = ['1st Semester', '2nd Semester', 'Summer'];
-
-// Generate academic year range from 2020-2021 through 2050-2051 (reversed: newest first)
-const generateAcademicYears = () => {
-  const startYear = 2020;
-  const endYear = 2050;
-  const years = [];
-  for (let year = endYear; year >= startYear; year--) {
-    years.push(`${year}-${year + 1}`);
-  }
-  return years;
-};
-
-const ACADEMIC_YEARS_LIST = generateAcademicYears();
 
 export default function StudentManagement() {
   // --- APPLICATION DATA STATES ---

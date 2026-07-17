@@ -1,10 +1,13 @@
 import React from 'react';
 import schoolLogo from '../../../../assets/logo/logo.png'; // Confirm accurate asset location mapping path
+import ChecksheetPrintSheet from './ChecksheetPrintSheet';
 
 export default function PrintReportModal({ isReportModalOpen, activeReportData, setIsReportModalOpen }) {
   if (!isReportModalOpen || !activeReportData) return null;
 
   const data = activeReportData.summary || {};
+  // Plan bridging prints its own checksheet document instead of the transferee report.
+  const isChecksheet = activeReportData.type === 'curr-shift';
   const currentTimestamp = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 
   return (
@@ -107,9 +110,11 @@ export default function PrintReportModal({ isReportModalOpen, activeReportData, 
         <div className="p-6 overflow-y-auto bg-slate-100 flex-1">
           
           <div id="transferee-evaluation-reports-wrapper" className="bg-white p-8 max-w-[8.5in] mx-auto text-black shadow-lg rounded-xl">
-            
+
+            {isChecksheet && <ChecksheetPrintSheet activeReportData={activeReportData} />}
+
             {/* ================= REPORT PAGE 1: TRANSFEREE EVALUATION ================= */}
-            <div className="print-page pt-0 mt-0">
+            <div className="print-page pt-0 mt-0" style={{ display: isChecksheet ? 'none' : undefined }}>
               
               {/* Header Letterhead */}
               <table className="w-full border-collapse" style={{ borderBottom: '3px double #000000', paddingBottom: '12px' }}>
@@ -241,10 +246,10 @@ export default function PrintReportModal({ isReportModalOpen, activeReportData, 
             </div>
 
             {/* Print separation gap */}
-            <div className="print-page-break"></div>
+            <div className="print-page-break" style={{ display: isChecksheet ? 'none' : undefined }}></div>
 
             {/* ================= REPORT PAGE 2: RECOMMENDED STUDY PLAN ================= */}
-            <div className="print-page pt-0 mt-0">
+            <div className="print-page pt-0 mt-0" style={{ display: isChecksheet ? 'none' : undefined }}>
               
               <div className="text-center" style={{ margin: '0 0 20px 0' }}>
                 <h2 style={{ fontFamily: 'Arial, sans-serif', fontSize: '13px', fontWeight: 'bold', textTransform: 'uppercase', color: '#0f172a', margin: '0' }}>

@@ -1,9 +1,34 @@
 // curriculumConfig.js
 
+// --- SHARED ACADEMIC ENUMERATIONS ---
+// Single definition shared by Student Management and the evaluation pipelines so
+// the option lists cannot drift apart.
+export const BATSTATEU_GRADES = ['1.00', '1.25', '1.50', '1.75', '2.00', '2.25', '2.50', '2.75', '3.00', '5.00', 'Inc', 'Drop', 'W'];
+export const SEMESTER_LIST = ['1st Semester', '2nd Semester', 'Summer'];
+
+// Grades that do not earn credit toward a curriculum requirement.
+export const NON_PASSING_GRADES = ['5.00', 'INC', 'DROP', 'DRP', 'W'];
+
+// Generate academic year range from 2020-2021 through 2050-2051 (reversed: newest first)
+export const generateAcademicYears = () => {
+  const startYear = 2020;
+  const endYear = 2050;
+  const years = [];
+  for (let year = endYear; year >= startYear; year--) {
+    years.push(`${year}-${year + 1}`);
+  }
+  return years;
+};
+
+export const ACADEMIC_YEARS_LIST = generateAcademicYears();
+
 // --- MAXIMUM UNITS CONFIGURATION MATRIX ---
+// Per year level and semester. `_mid` is the midyear/summer term.
+// y4_s2 is capped at 6 for thesis/capstone/OJT — a full slot there is 6u, not 21u.
+// Also read by checkEnrollmentLimit() for student enrollment validation.
 export const MAX_UNITS_CONFIG = {
   new_curriculum: {
-    y1_s1: 24, y1_s2: 24, y2_s1: 23, y2_s2: 23, y2_mid: 6,
+    y1_s1: 24, y1_s2: 24, y1_mid: 12, y2_s1: 23, y2_s2: 23, y2_mid: 6,
     y3_s1: 21, y3_s2: 21, y3_mid: 6, y4_s1: 21, y4_s2: 6
   },
   old_curriculum: {
