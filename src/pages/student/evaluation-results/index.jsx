@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
-import { Download, Award, FileText, Loader2 } from 'lucide-react';
+import { Download, Award, FileText } from 'lucide-react';
 import { useAuth } from '../../../context/AuthContext';
 import { studentService } from '../../../services/studentService';
+import LoadingState from '../../../components/LoadingState';
 
 export default function StudentEvaluationResultsPage() {
   const { user } = useAuth();
@@ -39,9 +40,7 @@ export default function StudentEvaluationResultsPage() {
 
   if (loading) {
     return (
-      <div className="flex justify-center items-center h-[50vh]">
-        <Loader2 className="animate-spin text-[#375534]" size={32} />
-      </div>
+      <LoadingState label="Loading Evaluation Results..." accent="#375534" />
     );
   }
 

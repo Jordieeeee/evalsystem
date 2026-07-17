@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
+import LoadingState from '../../../components/LoadingState';
 import { subjectService } from "../../../services/subjectService";
 import { 
   Plus, Layers, BookOpen, GraduationCap, Edit2, Archive, Info, 
-  Search, AlertCircle, RefreshCw, Filter, Trash2, Activity, RotateCcw
+  Search, AlertCircle, Filter, Trash2, Activity, RotateCcw
 } from 'lucide-react'; 
 
 export default function CurriculumBuilder() {
@@ -689,10 +690,7 @@ export default function CurriculumBuilder() {
       {/* MAIN CONTENT WORKSPACE PANEL */}
       <div className="max-w-7xl mx-auto">
         {loading ? (
-          <div className="text-center py-20 text-slate-400 text-xs font-medium flex flex-col items-center gap-2">
-            <RefreshCw className="animate-spin text-slate-300" size={24} />
-            Loading Database Records...
-          </div>
+          <LoadingState label="Loading Database Records..." className="py-20" />
         ) : !matchesFound ? (
           /* GLOBAL NO RECORDS ALERT STATE FOR BOTH VIEW MODES */
           <div className="bg-white border border-slate-200/80 rounded-2xl py-16 px-6 text-center shadow-xs">

@@ -1,13 +1,14 @@
 import { useState, useEffect } from 'react';
 import { 
   Users, BookOpen, ClipboardCheck,
-  PlusCircle, CheckCircle2, FileSpreadsheet, UserCheck, Loader2
+  PlusCircle, CheckCircle2, FileSpreadsheet, UserCheck
 } from 'lucide-react';
 import { studentService } from '../../../services/studentService';
 import { subjectService } from '../../../services/subjectService';
 import { evaluationService } from '../../../services/evaluationService';
 import { systemService } from '../../../services/systemService';
 import { Link } from 'react-router-dom';
+import LoadingState from '../../../components/LoadingState';
 
 export default function AdminDashboardPage() {
   const [loading, setLoading] = useState(true);
@@ -120,9 +121,7 @@ export default function AdminDashboardPage() {
 
   if (loading) {
     return (
-      <div className="flex justify-center items-center h-[70vh] text-[#375534]">
-        <Loader2 className="animate-spin" size={36} />
-      </div>
+      <LoadingState label="Loading Console Metrics..." accent="#375534" />
     );
   }
 

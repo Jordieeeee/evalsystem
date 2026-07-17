@@ -33,7 +33,7 @@ export default function PrintReportModal({
 
         {/* Modal Sheet Scroll View (Desktop Screen Render) */}
         <div className="p-6 overflow-y-auto bg-slate-100 flex-1">
-          
+
           <div id="transferee-evaluation-reports-wrapper" className="bg-white p-8 max-w-[8.5in] mx-auto text-black shadow-lg rounded-xl">
 
             {isReturningReport ? (
@@ -298,7 +298,7 @@ export default function PrintReportModal({
               /* ================= TRANSFEREE / DEFAULT REPORT (unchanged) ================= */
               <>
                 <div className="print-page pt-0 mt-0">
-                  
+
                   {/* Header Letterhead */}
                   <table className="w-full border-collapse" style={{ borderBottom: '3px double #000000', paddingBottom: '12px' }}>
                     <tbody>
@@ -433,7 +433,7 @@ export default function PrintReportModal({
 
                 {/* ================= REPORT PAGE 2: RECOMMENDED STUDY PLAN ================= */}
                 <div className="print-page pt-0 mt-0">
-                  
+
                   <div className="text-center" style={{ margin: '0 0 20px 0' }}>
                     <h2 style={{ fontFamily: 'Arial, sans-serif', fontSize: '13px', fontWeight: 'bold', textTransform: 'uppercase', color: '#0f172a', margin: '0' }}>
                       Recommended Course Plan & Graduation Roadmap

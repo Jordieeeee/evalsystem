@@ -9,6 +9,7 @@ import {
 import { db } from '../../../services/firebase';
 import { systemService } from '../../../services/systemService';
 import CopyOfGradesMatrix from '../../../components/CopyOfGradesMatrix';
+import LoadingState from '../../../components/LoadingState';
 import {
   collection, doc, setDoc, updateDoc, addDoc, deleteDoc, query, where, onSnapshot, getDoc
 } from 'firebase/firestore';
@@ -685,6 +686,16 @@ export default function StudentManagement() {
     return matchSearch && matchCurr && matchYear && matchStatus && matchAdmin && matchClass && matchTrack;
   });
 
+
+  // `loading` is only true until the first students snapshot lands, so this
+  // gates the initial load without flashing on later stream updates.
+  if (loading) {
+    return (
+      <div className="p-8 bg-[#f8fafc] min-h-screen text-slate-800 font-sans antialiased relative">
+        <LoadingState label="Loading Student Directory..." />
+      </div>
+    );
+  }
 
   return (
     <div className="p-8 bg-[#f8fafc] min-h-screen text-slate-800 font-sans antialiased relative">

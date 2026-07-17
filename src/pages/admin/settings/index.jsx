@@ -9,6 +9,7 @@ import {
   Loader2
 } from 'lucide-react';
 // CRITICAL: Ensure this path correctly points to your services folder
+import LoadingState from '../../../components/LoadingState';
 import { systemService } from '../../../services/systemService';
 
 export default function AdminSettingsPage() {
@@ -240,9 +241,7 @@ export default function AdminSettingsPage() {
               <p className="text-xs text-slate-500 mb-2">Controls the term filtering logic system-wide (e.g., eligible subject assignment scopes).</p>
               
               {isLoadingAcademic ? (
-                <div className="flex items-center gap-2 text-sm font-bold text-slate-400 py-4">
-                  <Loader2 className="animate-spin" size={16} /> Loading live configuration...
-                </div>
+                <LoadingState label="Loading live configuration..." className="py-8" />
               ) : (
                 <form onSubmit={handleSaveAcademicConfig} className="space-y-4 max-w-sm text-xs font-bold text-slate-500 uppercase tracking-wider">
                   <div className="space-y-1.5">

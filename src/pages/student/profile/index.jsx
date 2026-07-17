@@ -6,11 +6,11 @@ import {
   Mail,
   Phone,
   MapPin,
-  GraduationCap,
-  Loader2
+  GraduationCap
 } from 'lucide-react';
 import { useAuth } from '../../../context/AuthContext';
 import { studentService } from '../../../services/studentService';
+import LoadingState from '../../../components/LoadingState';
 
 export default function StudentProfilePage() {
   const { user } = useAuth();
@@ -69,9 +69,7 @@ export default function StudentProfilePage() {
 
   if (loading || !studentInfo) {
     return (
-      <div className="flex justify-center items-center h-[50vh]">
-        <Loader2 className="animate-spin text-[#375534]" size={32} />
-      </div>
+      <LoadingState label="Loading Your Profile..." accent="#375534" />
     );
   }
 

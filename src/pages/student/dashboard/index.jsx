@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
-import { BookOpen, CheckCircle2, Clock, Award, Loader2 } from 'lucide-react';
+import { BookOpen, CheckCircle2, Clock, Award } from 'lucide-react';
 import { studentService } from '../../../services/studentService';
 import { useAuth } from '../../../context/AuthContext';
+import LoadingState from '../../../components/LoadingState';
 
 export default function StudentDashboardTab() {
   const { user, profile } = useAuth();
@@ -33,9 +34,7 @@ export default function StudentDashboardTab() {
 
   if (loading) {
     return (
-      <div className="flex justify-center items-center h-[50vh]">
-        <Loader2 className="animate-spin text-[#375534]" size={32} />
-      </div>
+      <LoadingState label="Loading Your Dashboard..." accent="#375534" />
     );
   }
 

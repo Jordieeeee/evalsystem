@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
 import { 
-  Printer, Loader2, FileSpreadsheet, Scroll, 
+  Printer, FileSpreadsheet, Scroll, 
   CheckCircle2, Calendar, ClipboardCheck, GraduationCap, ShieldAlert,
   ArrowUpRight, BarChart3, TrendingUp, HelpCircle
 } from 'lucide-react';
+import LoadingState from '../../../components/LoadingState';
 import { studentService } from '../../../services/studentService';
 import { evaluationService } from '../../../services/evaluationService';
 import { subjectService } from '../../../services/subjectService';
@@ -101,15 +102,7 @@ export default function AdminReportsPage() {
   const triggerPrint = () => window.print();
 
   if (loading) {
-    return (
-      <div className="flex flex-col justify-center items-center h-[65vh] gap-4 bg-[#f8faf7]/50 rounded-3xl border border-slate-100">
-        <div className="relative flex items-center justify-center">
-          <div className="w-12 h-12 rounded-full border-4 border-slate-100 border-t-[#7D1924] animate-spin" />
-          <Loader2 className="absolute text-[#7D1924] animate-pulse" size={18} />
-        </div>
-        <span className="text-xs font-black uppercase tracking-widest text-slate-400">Compiling Report Matrices...</span>
-      </div>
-    );
+    return <LoadingState label="Compiling Report Matrices..." />;
   }
 
   return (
