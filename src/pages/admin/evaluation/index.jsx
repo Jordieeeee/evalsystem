@@ -59,7 +59,15 @@ export default function AdminEvaluationPage() {
   // Find selected student details on-the-fly to bypass cascading re-render effect warnings
   const selectedStudentData = students.find(s => s.id === selectedStudentId) || null;
 
-  // Auto-switch evaluation strategy dropdown option based on selected student profile metadata admissionType[cite: 1]
+  // AUTOMATED CURRICULUM ROUTING: Resolves context strictly from student profile timeline configuration
+  const activeStudentCurriculum = selectedStudentData
+    ? (() => {
+        const startYear = parseInt(selectedStudentData.academicYear?.split('-')[0], 10);
+        return (!isNaN(startYear) && startYear <= 2025) ? 'Old Curriculum' : 'New Curriculum';
+      })()
+    : 'New Curriculum';
+
+  // Auto-switch evaluation strategy dropdown option based on selected student profile metadata admissionType[cite: 2]
   useEffect(() => {
     if (selectedStudentData) {
       const type = String(selectedStudentData.admissionType || 'freshman').toLowerCase();
@@ -70,10 +78,10 @@ export default function AdminEvaluationPage() {
     }
   }, [selectedStudentId, selectedStudentData]);
 
-  // Compute Allowed Units based on selected student details on-the-fly[cite: 1]
+  // Compute Allowed Units based on selected student details on-the-fly[cite: 2]
   const maxAllowedUnits = (() => {
     if (!selectedStudentData) return 21;
-    const cKey = selectedStudentData.curriculum === 'NEW' ? 'new_curriculum' : 'old_curriculum';
+    const cKey = activeStudentCurriculum === 'New Curriculum' ? 'new_curriculum' : 'old_curriculum';
     const cleanYear = normalizeYear(selectedStudentData.yearLevel);
     const cleanSemesterVal = normalizeSemester(selectedStudentData.semester);
     const semShort = cleanSemesterVal === '2nd' ? '2' : cleanSemesterVal === 'summer' ? 'mid' : '1';
@@ -113,7 +121,7 @@ export default function AdminEvaluationPage() {
       snapshot.forEach((doc) => { list.push({ id: doc.id, ...doc.data() }); });
       setNewSubjectsCatalog(list);
     });
-    const unsubOld = onSnapshot(collection(db, 'old_subjects'), (snapshot) => {
+    const docOld = onSnapshot(collection(db, 'old_subjects'), (snapshot) => {
       const list = [];
       snapshot.forEach((doc) => { list.push({ id: doc.id, ...doc.data() }); });
       setOldSubjectsCatalog(list);
@@ -123,10 +131,10 @@ export default function AdminEvaluationPage() {
       snapshot.forEach((doc) => { list.push({ id: doc.id, ...doc.data() }); });
       setAuditTrailLogs(list.sort((a, b) => b.evaluationDate.localeCompare(a.evaluationDate)));
     });
-    return () => { unsubNew(); unsubOld(); unsubAudit(); };
+    return () => { unsubNew(); docOld(); unsubAudit(); };
   }, []);
 
-  // Compute Dashboard Statistics dynamically[cite: 1]
+  // Compute Dashboard Statistics dynamically[cite: 2]
   const dashboardStats = (() => {
     let activeEnrollments = 0;
     let deficienciesCount = 0;
@@ -153,7 +161,7 @@ export default function AdminEvaluationPage() {
     };
   })();
 
-  // Sync historical database logs on student selection switch[cite: 1]
+  // Sync historical database logs on student selection switch[cite: 2]
   useEffect(() => {
     if (!selectedStudentId) return;
     const unsubHistory = onSnapshot(
@@ -167,7 +175,7 @@ export default function AdminEvaluationPage() {
     return () => { unsubHistory(); };
   }, [selectedStudentId]);
 
-  // Run initial TOR verification on history payload changes[cite: 1]
+  // Run initial TOR verification on history payload changes[cite: 2]
   useEffect(() => {
     if ((evaluationStrategy === 'transferee' || evaluationStrategy === 'shiftee') && studentSubjectsHistory.length > 0) {
       const errors = [];
@@ -184,7 +192,7 @@ export default function AdminEvaluationPage() {
     }
   }, [studentSubjectsHistory, evaluationStrategy]);
 
-  // Handle student resetting change selection[cite: 1]
+  // Handle student resetting change selection[cite: 2]
   const handleStudentSelectChange = (e) => {
     const val = e.target.value;
     setSelectedStudentId(val);
@@ -198,7 +206,7 @@ export default function AdminEvaluationPage() {
   const handleAddOverride = (e) => {
     e.preventDefault();
     if (!overrideForm.extCode) return alert("Select an external subject code.");
-         
+               
     setManualOverrides(prev => ({
       ...prev,
       [overrideForm.extCode.toUpperCase()]: {
@@ -216,7 +224,7 @@ export default function AdminEvaluationPage() {
     setManualOverrides(updated);
   };
 
-  // Dynamic execution function to support manual transcript writes inside transferee workspaces
+  // FIXED: Added bsuEquivalentCode and bsuEquivalentTitle to ensure fields write properly to database[cite: 2]
   const handleAddManualSubjectFromTransferee = async (subjectPayload) => {
     if (!selectedStudentId) return;
     try {
@@ -229,6 +237,11 @@ export default function AdminEvaluationPage() {
         status: subjectPayload.status,
         termSaved: subjectPayload.termSaved,
         isManualEntry: true,
+        semesterTaken: subjectPayload.semesterTaken || '1st Semester',
+        yearLevelTaken: subjectPayload.yearLevelTaken || 'First Year',
+        academicYearTaken: subjectPayload.academicYearTaken || '2025-2026',
+        bsuEquivalentCode: subjectPayload.bsuEquivalentCode || 'UNMAPPED',
+        bsuEquivalentTitle: subjectPayload.bsuEquivalentTitle || 'Exception Credit',
         recordedAt: new Date().toISOString()
       });
     } catch (err) {
@@ -237,7 +250,6 @@ export default function AdminEvaluationPage() {
     }
   };
 
-  // Dynamic execution function to delete manual transcript items from transferee workspace
   const handleDeleteManualSubjectFromTransferee = async (subjectId) => {
     try {
       await deleteDoc(doc(db, 'studentSubjects', subjectId));
@@ -251,8 +263,7 @@ export default function AdminEvaluationPage() {
     if (!selectedStudentId || !auditOutput) return;
     setIsSubmitting(true);
     try {
-      const timestamp = new Date().toISOString();
-             
+      const timestamp = new Date().toISOString();                     
       const payload = {
         evaluationDate: timestamp,
         evaluatedBy: "Registrar Executive Terminal Office",
@@ -267,8 +278,7 @@ export default function AdminEvaluationPage() {
         newProgram: evaluationStrategy === 'shiftee' ? newShifteeProgram : null,
         manualOverrides: manualOverrides
       };
-      const studentProfileUpdates = {};
-             
+      const studentProfileUpdates = {};                     
       if (['transferee', 'shiftee', 'returning'].includes(evaluationStrategy)) {
         studentProfileUpdates.classification = 'irregular';
       }
@@ -278,7 +288,6 @@ export default function AdminEvaluationPage() {
       if (Object.keys(studentProfileUpdates).length > 0) {
         await studentService.updateStudent(selectedStudentId, studentProfileUpdates);
       }
-      // Synchronize student subjects history collection in Firebase for transferred/credited matches[cite: 1]
       if (evaluationStrategy === 'transferee' && auditOutput.creditedList?.length > 0) {
         const batchPromises = auditOutput.creditedList.map(subject => {
           const exists = studentSubjectsHistory.some(s => s.subjectCode === subject.code.toUpperCase());
@@ -296,8 +305,7 @@ export default function AdminEvaluationPage() {
         });
         await Promise.all(batchPromises);
       }
-      await addDoc(collection(db, 'evaluation_history'), payload);
-             
+      await addDoc(collection(db, 'evaluation_history'), payload);                     
       alert(`Evaluation completed. Student status finalized as: ${auditOutput.overallEligibility}. Student master record has been synchronized.`);
       await loadPageData();
       setModuleView('dashboard');
@@ -319,7 +327,7 @@ export default function AdminEvaluationPage() {
       type: typeLabel,
       studentId: selectedStudentId,
       name: `${selectedStudentData.lastName}, ${selectedStudentData.firstName}`,
-      curriculum: selectedStudentData.curriculum,
+      curriculum: activeStudentCurriculum === 'New Curriculum' ? 'NEW' : 'OLD',
       eligibility: auditOutput.overallEligibility,
       timestamp: new Date().toLocaleString(),
       summary: auditOutput,
@@ -331,15 +339,25 @@ export default function AdminEvaluationPage() {
   };
 
   // --- AUTOMATED EVALUATION PIPELINE CENTRAL ROUTER DISPATCHER ---
+  // --- AUTOMATED EVALUATION PIPELINE CENTRAL ROUTER DISPATCHER ---
   const runCurriculumEvaluationSummary = () => {
     if (!selectedStudentData) return null;
-    const catalog = selectedStudentData.curriculum === 'NEW' ? newSubjectsCatalog : oldSubjectsCatalog;
-         
+    const catalog = activeStudentCurriculum === 'New Curriculum' ? newSubjectsCatalog : oldSubjectsCatalog;
+               
     const subjectStatuses = {};
     const passedCodes = [];
     const activeCodes = [];
+
+    // Helper utility to strictly strip punctuation, spaces, and capitalize (e.g. "GEd_102" & "GED 102" -> "GED102")
+    const normalizeSubjectCode = (code) => {
+      return String(code || '').replace(/[^a-zA-Z0-9]/g, '').toUpperCase().trim();
+    };
+
     studentSubjectsHistory.forEach(s => {
-      const code = String(s.subjectCode || '').toUpperCase();
+      const rawCode = String(s.subjectCode || '').toUpperCase();
+      // Normalize code so we can match it accurately against curriculum templates regardless of spacing or symbols
+      const code = normalizeSubjectCode(rawCode);
+      
       let determinedStatus = 'Not Taken';
       if (s.termSaved === 'Transferred/Credited' || s.status === 'credited' || s.isManualEntry) {
         determinedStatus = 'Credited';
@@ -359,6 +377,7 @@ export default function AdminEvaluationPage() {
       }
       subjectStatuses[code] = { status: determinedStatus, grade: s.grade || '-', source: s.isManualEntry ? 'Transferred' : 'BSU' };
     });
+
     let pipelineResult;
     if (evaluationStrategy === 'graduation') {
       pipelineResult = runGraduationEvaluation(catalog, subjectStatuses);
@@ -381,9 +400,11 @@ export default function AdminEvaluationPage() {
     } else {
       pipelineResult = runRegularEvaluation(catalog, subjectStatuses, passedCodes);
     }
+
     let recommendedStudyPlan = [];
     let simulatedLoad = 0;
     const targets = pipelineResult.subjectList || [];
+
     const getSubjectYearLevel = (code) => {
       const numberPart = code.match(/\d+/);
       if (numberPart) {
@@ -392,13 +413,16 @@ export default function AdminEvaluationPage() {
       }
       return 1;
     };
+
     const studentAssignedYear = normalizeYear(selectedStudentData.yearLevel);
     const numericStudentYear = parseInt(studentAssignedYear, 10) || 1;
     const sortedTargets = [...targets].filter(t => t.status === 'Not Taken').sort((a, b) => getSubjectYearLevel(a.code) - getSubjectYearLevel(b.code));
+
     sortedTargets.forEach(rec => {
       const courseYear = getSubjectYearLevel(rec.code);
-      const isAlreadyRecommended = recommendedStudyPlan.some(r => r.code === rec.code);
+      const isAlreadyRecommended = recommendedStudyPlan.some(r => normalizeSubjectCode(r.code) === normalizeSubjectCode(rec.code));
       const satisfiesSequencing = courseYear <= (numericStudentYear + 1);
+      
       if (rec.prereqsCleared && satisfiesSequencing && !isAlreadyRecommended) {
         if (simulatedLoad + rec.units <= maxAllowedUnits) {
           recommendedStudyPlan.push(rec);
@@ -406,13 +430,16 @@ export default function AdminEvaluationPage() {
         }
       }
     });
+
     let warningAlerts = [...(pipelineResult.alerts || [])];
     if (simulatedLoad < minAllowedUnits && recommendedStudyPlan.length > 0) {
       warningAlerts.push(`Academic Warning: Load counter evaluates underload (${simulatedLoad} units). Minimum standard is ${minAllowedUnits} units.`);
     }
+
     const totalRequired = catalog.length;
     const passedOrCreditedCount = targets.filter(t => ['Completed', 'Credited'].includes(t.status)).length;
     const completionPercentage = totalRequired > 0 ? ((passedOrCreditedCount / totalRequired) * 100).toFixed(1) : pipelineResult.completionPercentage || '0.0';
+
     return {
       ...pipelineResult,
       completionPercentage,
@@ -422,13 +449,13 @@ export default function AdminEvaluationPage() {
       alerts: warningAlerts
     };
   };
+  
   const auditOutput = runCurriculumEvaluationSummary();
   const filteredHistoryLogs = auditTrails.filter(log => log.studentId?.toLowerCase().includes(historySearchQuery.toLowerCase()));
   const handleIdStrFilterLogs = (value) => value.replace(/[^0-9-]/g, '');
 
   return (
     <div className="p-8 bg-[#f8fafc] min-h-screen text-slate-800 font-sans antialiased text-left space-y-6 relative">
-             
       {/* ================= HEADER CONTROL BAR ================= */}
       <div className="bg-white p-6 rounded-3xl border shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
@@ -477,6 +504,9 @@ export default function AdminEvaluationPage() {
               <div className="flex items-center gap-1.5"><User size={14} className="text-slate-400"/><span>Profile Target:</span><span className="text-slate-900 font-extrabold">{selectedStudentData.lastName}, {selectedStudentData.firstName}</span></div>
               <div className="flex items-center gap-1.5"><ClipboardList size={14} className="text-slate-400"/><span>Admission Type:</span><span className="bg-blue-100 text-blue-800 text-[10px] px-2 py-0.5 rounded uppercase font-black">{selectedStudentData.admissionType || 'Freshman'}</span></div>
               <div className="flex items-center gap-1.5"><Calendar size={14} className="text-slate-400"/><span>Assigned Standing:</span><span className="text-slate-900">{selectedStudentData.yearLevel} ({selectedStudentData.semester})</span></div>
+              <div className="flex items-center gap-1.5 ml-auto text-blue-600 font-extrabold bg-blue-50 px-3 py-1 rounded-lg border border-blue-100 text-[10px] uppercase">
+                <span>Active Profile Track: {activeStudentCurriculum}</span>
+              </div>
             </div>
           )}
 
@@ -494,7 +524,7 @@ export default function AdminEvaluationPage() {
              />
           )}
 
-          {/* NEW TRANSFEREE HIGH-PERFORMANCE WORKSPACE SPLIT-VIEW (HCI DESIGN)[cite: 1] */}
+          {/* NEW TRANSFEREE HIGH-PERFORMANCE WORKSPACE SPLIT-VIEW (HCI DESIGN)[cite: 2] */}
           {selectedStudentData && evaluationStrategy === 'transferee' && auditOutput && (
             <TransfereeShifteeView
               isTorComplete={isTorComplete}
@@ -511,7 +541,8 @@ export default function AdminEvaluationPage() {
               isSubmitting={isSubmitting}
               onAddManualSubject={handleAddManualSubjectFromTransferee}
               onDeleteManualSubject={handleDeleteManualSubjectFromTransferee}
-              bsuCatalog={selectedStudentData.curriculum === 'NEW' ? newSubjectsCatalog : oldSubjectsCatalog}
+              bsuCatalog={activeStudentCurriculum === 'New Curriculum' ? newSubjectsCatalog : oldSubjectsCatalog}
+              selectedStudentData={selectedStudentData}
             />
           )}
 
@@ -534,7 +565,7 @@ export default function AdminEvaluationPage() {
                isSubmitting={isSubmitting}
                onAddManualSubject={handleAddManualSubjectFromTransferee}
                onDeleteManualSubject={handleDeleteManualSubjectFromTransferee}
-               bsuCatalog={selectedStudentData.curriculum === 'NEW' ? newSubjectsCatalog : oldSubjectsCatalog}
+               bsuCatalog={activeStudentCurriculum === 'New Curriculum' ? newSubjectsCatalog : oldSubjectsCatalog}
              />
           )}
 
@@ -602,7 +633,6 @@ export default function AdminEvaluationPage() {
         </div>
       )}
 
-      {/* ================= REUSABLE PRINT PREVIEW SHEET DIALOG MODAL ================= */}
       <PrintReportModal isReportModalOpen={isReportModalOpen} activeReportData={activeReportData} setIsReportModalOpen={setIsReportModalOpen} prevSchoolName={prevSchoolName} prevProgram={prevProgram} newShifteeProgram={newShifteeProgram} />
     </div>
   );
