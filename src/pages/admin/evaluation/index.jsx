@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   X, Printer, FileText, LayoutDashboard, ShieldAlert, Award, Sparkles, ClipboardList, CheckCircle2, History, AlertTriangle, User, Calendar, RefreshCw, Check, Ban
 } from 'lucide-react';
+import { useAuth } from '../../../context/AuthContext';
 import { evaluationService } from '../../../services/evaluationService';
 import { studentService } from '../../../services/studentService';
 // --- CONFIG & UTILS IMPORT ---

@@ -19,8 +19,7 @@ import {
 const ADMISSION_TYPES = ['Freshman', 'Transferee', 'Shiftee', 'Returnee'];
 const COURSE_LIST = ['BSIT', 'BSCS', 'BSEMC', 'BSIS'];
 const SECTION_LIST = ['A', 'B', 'C', 'D'];
-const SEMESTER_LIST = ['1st Semester', '2nd Semester', 'Summer'];
-const YEAR_LEVELS = ['First Year', 'Second Year', 'Third Year', 'Fourth Year'];
+const YEAR_LEVELS =['First Year', 'Second Year', 'Third Year', 'Fourth Year'];
 
 // Detailed Student Statuses mapping
 const STUDENT_STATUSES = [
@@ -34,17 +33,6 @@ const STUDENT_STATUSES = [
   { value: 'Dropped', label: 'Dropped', desc: 'The student officially withdrew or discontinued enrollment during the semester.' },
   { value: 'Transferred Out', label: 'Transferred Out', desc: 'The student has transferred to another institution and is no longer active in the university.' }
 ];
-
-const generateAcademicYears = () => {
-  const startYear = 2020;
-  const endYear = 2050;
-  const years = [];
-  for (let year = endYear; year >= startYear; year--) {
-    years.push(`${year}-${year + 1}`);
-  }
-  return years;
-};
-const ACADEMIC_YEARS_LIST = generateAcademicYears();
 
 export default function StudentManagement() {
   // --- APPLICATION DATA STATES ---
