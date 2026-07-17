@@ -24,6 +24,8 @@ import GraduationPipelineView from './components/GraduationPipelineView';
 import TransfereeShifteeView from './components/TransfereeShifteeView';
 import GeneralWorkspaceView from './components/GeneralWorkspaceView';
 import PrintReportModal from './components/PrintReportModal';
+import StudentSearchSelect from '../../../components/ui/StudentSearchSelect';
+import SearchableSelect from '../../../components/ui/SearchableSelect';
 
 // Single source for the six pipeline tracks: drives the dropdown options and the
 // section header, so a label can never drift between the two.
@@ -222,8 +224,7 @@ export default function AdminEvaluationPage() {
   }, [studentSubjectsHistory, evaluationStrategy]);
 
   // Handle student resetting change selection[cite: 2]
-  const handleStudentSelectChange = (e) => {
-    const val = e.target.value;
+  const handleStudentSelectChange = (val) => {
     setSelectedStudentId(val);
     setManualOverrides({});
     if (!val) {
@@ -629,18 +630,31 @@ return (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
             <label className="block text-xs font-black text-slate-400 uppercase mb-1.5">1. Targeting Profile Node Context</label>
-            <select value={selectedStudentId} onChange={handleStudentSelectChange} className="w-full border border-slate-200 bg-white p-3 rounded-xl text-xs font-bold text-slate-800 outline-none">
-              <option value="">-- Choose student index path parameters --</option>
-              {students.map(s => <option key={s.id} value={s.id}>{s.lastName}, {s.firstName} ({s.id})</option>)}
-            </select>
+            <StudentSearchSelect
+              students={students}
+              value={selectedStudentId}
+              onChange={handleStudentSelectChange}
+              placeholder="Select Student…"
+            />
           </div>
           <div>
             <label className="block text-xs font-bold text-slate-400 uppercase mb-1.5">2. Choose Strategic Evaluation Track Pipeline</label>
-            <select value={evaluationStrategy} onChange={e => setEvaluationStrategy(e.target.value)} className="w-full border border-slate-200 bg-white p-3 rounded-xl text-xs font-black text-blue-700 outline-none">
-              {EVALUATION_TRACKS.map(track => (
-                <option key={track.value} value={track.value}>{track.label}</option>
-              ))}
-            </select>
+            <SearchableSelect
+              items={EVALUATION_TRACKS}
+              value={evaluationStrategy}
+              onChange={setEvaluationStrategy}
+              getKey={track => track.value}
+              getLabel={track => track.label}
+              searchable={false}
+              showClear={false}
+              triggerLabelClassName="font-black text-blue-700 truncate"
+              renderRow={(track, { isSelected }) => (
+                <>
+                  <span className="font-bold text-slate-800 truncate">{track.label}</span>
+                  {isSelected && <Check size={14} className="text-blue-700 shrink-0" />}
+                </>
+              )}
+            />
           </div>
         </div>
 
