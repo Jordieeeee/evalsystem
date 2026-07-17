@@ -368,11 +368,38 @@ export default function AdminEvaluationPage() {
     setIsReportModalOpen(true);
   };
 
+<<<<<<< HEAD
   // --- AUTOMATED EVALUATION PIPELINE CENTRAL ROUTER DISPATCHER ---
   // --- AUTOMATED EVALUATION PIPELINE CENTRAL ROUTER DISPATCHER ---
   const runCurriculumEvaluationSummary = () => {
     if (!selectedStudentData) return null;
     const catalog = activeStudentCurriculum === 'New Curriculum' ? newSubjectsCatalog : oldSubjectsCatalog;
+=======
+// --- AUTOMATED EVALUATION PIPELINE CENTRAL ROUTER DISPATCHER ---
+  const runCurriculumEvaluationSummary = () => {
+    if (!selectedStudentData) return null;
+
+    // --- CURRICULUM SHIFT LOGIC (3-YEAR LOA RULE) ---
+    const CURRICULUM_SHIFT_LIMIT_YEARS = 3;
+    const currentYear = new Date().getFullYear();
+    const academicYearStr = selectedStudentData.academicYear || '';
+    const lastActiveYear = parseInt(academicYearStr.split('-')[0], 10) || currentYear;
+    const yearsSinceLastActive = currentYear - lastActiveYear;
+
+    const storedCurriculumIsOld = selectedStudentData.curriculum !== 'NEW';
+    const shouldForceNewCurriculum =
+      evaluationStrategy === 'returning' &&
+      storedCurriculumIsOld &&
+      yearsSinceLastActive >= CURRICULUM_SHIFT_LIMIT_YEARS &&
+      newSubjectsCatalog.length > 0;
+
+    const effectiveCurriculum = shouldForceNewCurriculum ? 'NEW' : (selectedStudentData.curriculum || 'OLD');
+    const catalog = effectiveCurriculum === 'NEW' ? newSubjectsCatalog : oldSubjectsCatalog;
+
+    const getCode = (course) => (course.courseCode || course.code || course.id || '').toUpperCase();
+    const getTitle = (course) => course.courseTitle || course.title || course.id;
+    const getUnits = (course) => parseInt(course.creditUnits || course.units || 3, 10);
+>>>>>>> 49c4c80 (Returnee)
 
     const subjectStatuses = {};
     const passedCodes = [];
@@ -408,10 +435,13 @@ export default function AdminEvaluationPage() {
       subjectStatuses[code] = { status: determinedStatus, grade: s.grade || '-', source: s.isManualEntry ? 'Transferred' : 'BSU' };
     });
 
+<<<<<<< HEAD
     // Plan bridging is admin-triggered and owns its full result shape, so it bypasses
     // the generic post-processing below, which assumes the 'Not Taken' status vocabulary.
     if (evaluationStrategy === 'curr-shift') return bridgingResult;
 
+=======
+>>>>>>> 49c4c80 (Returnee)
     let pipelineResult;
     if (evaluationStrategy === 'graduation') {
       pipelineResult = runGraduationEvaluation(catalog, subjectStatuses);
@@ -433,6 +463,16 @@ export default function AdminEvaluationPage() {
       pipelineResult = runRegularEvaluation(catalog, subjectStatuses, passedCodes);
     }
 
+<<<<<<< HEAD
+=======
+    if (shouldForceNewCurriculum) {
+      pipelineResult.alerts = [
+        `Curriculum Shift Applied: Student has been inactive for ${yearsSinceLastActive} year(s), exceeding the ${CURRICULUM_SHIFT_LIMIT_YEARS}-year limit. The old curriculum is no longer available — this evaluation now uses the New Curriculum.`,
+        ...(pipelineResult.alerts || [])
+      ];
+    }
+
+>>>>>>> 49c4c80 (Returnee)
     let recommendedStudyPlan = [];
     let simulatedLoad = 0;
     const targets = pipelineResult.subjectList || [];
@@ -448,6 +488,7 @@ export default function AdminEvaluationPage() {
 
     const studentAssignedYear = normalizeYear(selectedStudentData.yearLevel);
     const numericStudentYear = parseInt(studentAssignedYear, 10) || 1;
+<<<<<<< HEAD
     const sortedTargets = [...targets].filter(t => t.status === 'Not Taken').sort((a, b) => getSubjectYearLevel(a.code) - getSubjectYearLevel(b.code));
 
     sortedTargets.forEach(rec => {
@@ -455,6 +496,19 @@ export default function AdminEvaluationPage() {
       const isAlreadyRecommended = recommendedStudyPlan.some(r => normalizeSubjectCode(r.code) === normalizeSubjectCode(rec.code));
       const satisfiesSequencing = courseYear <= (numericStudentYear + 1);
 
+=======
+    const retakeableStatuses = evaluationStrategy === 'returning'
+      ? ['Not Taken', 'Failed', 'Withdrawn', 'Incomplete']
+      : ['Not Taken'];
+    const sortedTargets = [...targets].filter(t => retakeableStatuses.includes(t.status)).sort((a, b) => getSubjectYearLevel(a.code) - getSubjectYearLevel(b.code));
+
+    sortedTargets.forEach(rec => {
+      const courseYear = getSubjectYearLevel(rec.code);
+      const isAlreadyRecommended = recommendedStudyPlan.some(r => r.code === rec.code);
+      const satisfiesSequencing = evaluationStrategy === 'returning' 
+        ? true 
+        : courseYear <= (numericStudentYear + 1);
+>>>>>>> 49c4c80 (Returnee)
       if (rec.prereqsCleared && satisfiesSequencing && !isAlreadyRecommended) {
         if (simulatedLoad + rec.units <= maxAllowedUnits) {
           recommendedStudyPlan.push(rec);
@@ -463,6 +517,60 @@ export default function AdminEvaluationPage() {
       }
     });
 
+<<<<<<< HEAD
+=======
+    // --- MULTI-TERM ROADMAP GENERATOR (RETURNING STUDENTS) ---
+    // Groups catalog subjects by their ACTUAL curriculum yearLevel + semesterOffered
+    // (e.g. "2nd Year - 1st Semester"), in curriculum order, but SKIPS any
+    // year/semester group that has zero remaining subjects (i.e. already fully
+    // completed/credited) — so the roadmap starts at wherever the student
+    // actually still has work left, not always at 1st Year.
+    let recommendedRoadmap = [];
+    if (evaluationStrategy === 'returning') {
+      const yearOrder = { '1st year': 1, '2nd year': 2, '3rd year': 3, '4th year': 4 };
+      const semOrder = { '1st semester': 1, '2nd semester': 2, 'summer': 3, 'mid year': 3 };
+
+      const groupsMap = new Map(); // key: "y-s" -> { yearLabel, semLabel, subjects: [] }
+
+      catalog.forEach(course => {
+        const code = getCode(course);
+        const info = subjectStatuses[code] || { status: 'Not Taken' };
+        if (!retakeableStatuses.includes(info.status)) return; // skip already completed/credited
+
+        const yearLabelRaw = String(course.yearLevel || '1st Year').trim();
+        const yearKey = yearLabelRaw.toLowerCase();
+        const semArray = Array.isArray(course.semesterOffered) ? course.semesterOffered : [course.semesterOffered || '1st Semester'];
+        const semLabelRaw = String(semArray[0] || '1st Semester').trim();
+        const semKey = semLabelRaw.toLowerCase();
+
+        const groupKey = `${yearKey}__${semKey}`;
+        if (!groupsMap.has(groupKey)) {
+          groupsMap.set(groupKey, {
+            yearLabel: yearLabelRaw,
+            semLabel: semLabelRaw,
+            yearOrderVal: yearOrder[yearKey] ?? 99,
+            semOrderVal: semOrder[semKey] ?? 99,
+            subjects: []
+          });
+        }
+        groupsMap.get(groupKey).subjects.push({
+          code,
+          title: getTitle(course),
+          units: getUnits(course)
+        });
+      });
+
+      recommendedRoadmap = Array.from(groupsMap.values())
+        .filter(g => g.subjects.length > 0) // <-- skip fully-completed groups entirely
+        .sort((a, b) => (a.yearOrderVal - b.yearOrderVal) || (a.semOrderVal - b.semOrderVal))
+        .map(g => ({
+          term: `${g.yearLabel} - ${g.semLabel}`,
+          totalUnits: g.subjects.reduce((sum, s) => sum + s.units, 0),
+          subjects: g.subjects
+        }));
+    }
+
+>>>>>>> 49c4c80 (Returnee)
     let warningAlerts = [...(pipelineResult.alerts || [])];
     if (simulatedLoad < minAllowedUnits && recommendedStudyPlan.length > 0) {
       warningAlerts.push(`Academic Warning: Load counter evaluates underload (${simulatedLoad} units). Minimum standard is ${minAllowedUnits} units.`);
@@ -477,8 +585,12 @@ export default function AdminEvaluationPage() {
       completionPercentage,
       totalRequired,
       recommendedStudyPlan,
+      recommendedRoadmap,
       simulatedLoad,
-      alerts: warningAlerts
+      alerts: warningAlerts,
+      effectiveCurriculum,
+      curriculumShifted: shouldForceNewCurriculum,
+      yearsSinceLastActive
     };
   };
 
@@ -533,11 +645,26 @@ export default function AdminEvaluationPage() {
           {/* Student Profile Info Preview Block Header Banner */}
           {selectedStudentData && (
             <div className="bg-slate-50 border border-slate-200/80 p-4 rounded-xl flex flex-wrap gap-x-6 gap-y-2 items-center text-xs font-bold text-slate-600 shadow-3xs animate-fadeIn">
+<<<<<<< HEAD
               <div className="flex items-center gap-1.5"><User size={14} className="text-slate-400" /><span>Profile Target:</span><span className="text-slate-900 font-extrabold">{selectedStudentData.lastName}, {selectedStudentData.firstName}</span></div>
               <div className="flex items-center gap-1.5"><ClipboardList size={14} className="text-slate-400" /><span>Admission Type:</span><span className="bg-blue-100 text-blue-800 text-[10px] px-2 py-0.5 rounded uppercase font-black">{selectedStudentData.admissionType || 'Freshman'}</span></div>
               <div className="flex items-center gap-1.5"><Calendar size={14} className="text-slate-400" /><span>Assigned Standing:</span><span className="text-slate-900">{selectedStudentData.yearLevel} ({selectedStudentData.semester})</span></div>
               <div className="flex items-center gap-1.5 ml-auto text-blue-600 font-extrabold bg-blue-50 px-3 py-1 rounded-lg border border-blue-100 text-[10px] uppercase">
                 <span>Active Profile Track: {activeStudentCurriculum}</span>
+=======
+              <div className="flex items-center gap-1.5"><User size={14} className="text-slate-400"/><span>Profile Target:</span><span className="text-slate-900 font-extrabold">{selectedStudentData.lastName}, {selectedStudentData.firstName}</span></div>
+              <div className="flex items-center gap-1.5"><ClipboardList size={14} className="text-slate-400"/><span>Admission Type:</span><span className="bg-blue-100 text-blue-800 text-[10px] px-2 py-0.5 rounded uppercase font-black">{selectedStudentData.admissionType || 'Freshman'}</span></div>
+              <div className="flex items-center gap-1.5"><Calendar size={14} className="text-slate-400"/><span>Assigned Standing:</span><span className="text-slate-900">{selectedStudentData.yearLevel} ({selectedStudentData.semester})</span></div>
+              <div className="ml-auto">
+                <span className={`text-[10px] px-2.5 py-1 rounded-md uppercase font-black tracking-wide ${
+                  auditOutput?.effectiveCurriculum === 'NEW' 
+                    ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' 
+                    : 'bg-amber-50 text-amber-700 border border-amber-200'
+                }`}>
+                  Active Profile Track: {auditOutput?.effectiveCurriculum === 'NEW' ? 'New Curriculum' : 'Old Curriculum'}
+                  {auditOutput?.curriculumShifted && ' (Auto-Shifted)'}
+                </span>
+>>>>>>> 49c4c80 (Returnee)
               </div>
             </div>
           )}
@@ -602,7 +729,11 @@ export default function AdminEvaluationPage() {
           )}
 
           {selectedStudentData && evaluationStrategy !== 'transferee' && evaluationStrategy !== 'shiftee' && evaluationStrategy !== 'graduation' && auditOutput && (
+<<<<<<< HEAD
             <GeneralWorkspaceView
+=======
+            <GeneralWorkspaceView 
+>>>>>>> 49c4c80 (Returnee)
               auditOutput={auditOutput}
               minAllowedUnits={minAllowedUnits}
               maxAllowedUnits={maxAllowedUnits}
@@ -610,6 +741,13 @@ export default function AdminEvaluationPage() {
               triggerReportModalOpen={handleTriggerReportModalOpen}
               handleFinalizeEvaluationMatrix={handleFinalizeEvaluationMatrix}
               isSubmitting={isSubmitting}
+<<<<<<< HEAD
+=======
+              catalog={selectedStudentData.curriculum === 'NEW' ? newSubjectsCatalog : oldSubjectsCatalog}
+              studentSubjectsHistory={studentSubjectsHistory}
+              onAddManualSubject={handleAddManualSubjectFromTransferee}
+              onDeleteManualSubject={handleDeleteManualSubjectFromTransferee}
+>>>>>>> 49c4c80 (Returnee)
             />
           )}
 
