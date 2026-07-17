@@ -1,23 +1,116 @@
 import React, { useState } from 'react';
-import { Sparkles, AlertTriangle, ShieldAlert, Printer, Save, Plus, Trash2, CheckCircle2 } from 'lucide-react';
+import { 
+  CheckCircle, XCircle, HelpCircle, BookOpen, Trash2, Check, X, Plus, FileSpreadsheet, Layers, FileText
+} from 'lucide-react';
+import { db } from '../../../../services/firebase';
+import { collection, addDoc, updateDoc, deleteDoc, doc } from 'firebase/firestore';
+import { checkEnrollmentLimit, getFallbackSubjects } from '../../../../services/curriculumConfig';
 
-const YEAR_OPTIONS = ['1st Year', '2nd Year', '3rd Year', '4th Year', '5th Year'];
-const SEMESTER_OPTIONS = ['1st Semester', '2nd Semester', 'Summer'];
-const GRADE_OPTIONS = ['1.0','1.25','1.5','1.75','2.0','2.25','2.5','2.75','3.0'];
-const SEMESTER_CYCLE = ['1st Semester', '2nd Semester'];
+const GRADES_LIST = ['1.00', '1.25', '1.50', '1.75', '2.00', '2.25', '2.50', '2.75', '3.00', '5.00', 'Inc', 'Drop', 'W'];
+const SEMESTER_LIST = ['1st Semester', '2nd Semester', 'Summer'];
+const YEAR_LEVELS = ['First Year', 'Second Year', 'Third Year', 'Fourth Year'];
 
-export default function GeneralWorkspaceView({ 
-  auditOutput, minAllowedUnits, maxAllowedUnits, evaluationStrategy, triggerReportModalOpen, handleFinalizeEvaluationMatrix, isSubmitting,
-  catalog, studentSubjectsHistory, onAddManualSubject, onDeleteManualSubject,
-  studentYearLevel, studentSemester
+export default function GeneralWorkspaceView({
+  auditOutput,
+  minAllowedUnits,
+  maxAllowedUnits,
+  evaluationStrategy,
+  handleTriggerReportModalOpen,
+  handleFinalizeEvaluationMatrix,
+  isSubmitting,
+  registrarRemarks,
+  setRegistrarRemarks,
+  selectedStudentData,
+  studentSubjectsHistory,
+  newSubjectsCatalog,
+  oldSubjectsCatalog
 }) {
-  const [selectedCodes, setSelectedCodes] = useState(new Set());
-  const [gradesByCode, setGradesByCode] = useState({});
-  const [selectedYear, setSelectedYear] = useState(YEAR_OPTIONS[0]);
-  const [selectedSemester, setSelectedSemester] = useState(SEMESTER_OPTIONS[0]);
-  const [isAdding, setIsAdding] = useState(false);
+  const [recordReviewTab, setRecordReviewTab] = useState('completed');
+  const [gradingSubjectId, setGradingSubjectId] = useState(null);
+  const [selectedInlineGrade, setSelectedInlineGrade] = useState('1.00');
 
-  if (!auditOutput) return null;
+  const [isSingleSubjectModalOpen, setIsSingleSubjectModalOpen] = useState(false);
+  const [isTemplateModalOpen, setIsPopulateModalOpen] = useState(false);
+
+  const [newSubjectRecord, setNewSubjectRecord] = useState({
+    subjectCode: '', subjectTitle: '', units: 3, term: '2026-2027', yearLevel: 'First Year', semester: '1st Semester', grade: 'In Progress'
+  });
+
+  if (!auditOutput || !selectedStudentData) return null;
+
+  const activeSemesterSubjects = (studentSubjectsHistory || []).filter(sub => 
+    sub.semester === selectedStudentData.semester && sub.yearLevel === selectedStudentData.yearLevel
+  );
+  
+  const totalEnrolledUnits = activeSemesterSubjects.reduce((acc, curr) => acc + (parseInt(curr.units) || 0), 0);
+  
+  const hasFailedActiveSubjects = activeSemesterSubjects.some(sub => 
+    sub.grade === '5.00' || ['failed', 'incomplete'].includes(String(sub.status).toLowerCase())
+  );
+  const isEligibleToAdvance = activeSemesterSubjects.length > 0 && !hasFailedActiveSubjects;
+
+  const handleInputGradeSubmit = async (subjectId) => {
+    const statusText = selectedInlineGrade === '5.00' ? 'failed' : ['Inc', 'Drop', 'W'].includes(selectedInlineGrade) ? 'incomplete' : 'passed';
+    try {
+      const docRef = doc(db, 'studentSubjects', subjectId);
+      await updateDoc(docRef, { grade: selectedInlineGrade, status: statusText, recordedAt: new Date().toISOString() });
+      setGradingSubjectId(null);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleAddManualSubject = async (e) => {
+    e.preventDefault();
+    if (!newSubjectRecord.subjectCode) return;
+    try {
+      await addDoc(collection(db, 'studentSubjects'), {
+        studentId: selectedStudentData.studentId || selectedStudentData.id,
+        subjectCode: newSubjectRecord.subjectCode.toUpperCase(),
+        subjectTitle: newSubjectRecord.subjectTitle || 'Manual Evaluation Course',
+        grade: newSubjectRecord.grade,
+        status: newSubjectRecord.grade === 'In Progress' ? 'in progress' : 'passed',
+        term: newSubjectRecord.term,
+        yearLevel: selectedStudentData.yearLevel,
+        semester: selectedStudentData.semester,
+        units: parseInt(newSubjectRecord.units, 10) || 3,
+        recordedAt: new Date().toISOString()
+      });
+      setIsSingleSubjectModalOpen(false);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handlePopulateSemesterTemplate = async (e) => {
+    e.preventDefault();
+    const catalog = selectedStudentData.curriculum === 'NEW' ? newSubjectsCatalog : oldSubjectsCatalog;
+    let matchingSubjects = (catalog || []).filter(sub => {
+      const subYear = String(sub.yearLevel || sub.year).toLowerCase();
+      const targetYear = String(selectedStudentData.yearLevel).toLowerCase();
+      return subYear.includes(targetYear.split(' ')[0]);
+    });
+
+    try {
+      for (const sub of matchingSubjects) {
+        await addDoc(collection(db, 'studentSubjects'), {
+          studentId: selectedStudentData.studentId || selectedStudentData.id,
+          subjectCode: (sub.courseCode || sub.code || '').toUpperCase(),
+          subjectTitle: sub.courseTitle || sub.title || 'Curriculum Course',
+          grade: 'In Progress',
+          status: 'in progress',
+          term: '2026-2027',
+          yearLevel: selectedStudentData.yearLevel,
+          semester: selectedStudentData.semester,
+          units: parseInt(sub.creditUnits || sub.units || 3, 10),
+          recordedAt: new Date().toISOString()
+        });
+      }
+      setIsPopulateModalOpen(false);
+    } catch (err) {
+      console.error(err);
+    }
+  };
 
   const unitsRemaining = auditOutput.unitsRemaining || 0;
   const maxUnitsPerSemester = maxAllowedUnits || 21;
@@ -255,20 +348,16 @@ export default function GeneralWorkspaceView({
   };
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 pt-2 text-left animate-fadeIn">
-      <div className="space-y-4 lg:col-span-1">
-        <div className="bg-slate-50/60 border border-slate-200/60 p-4 rounded-2xl space-y-3.5 text-xs font-semibold">
-          <div className="flex justify-between items-center border-b border-slate-200/60 pb-2">
-            <span className="font-black text-slate-900">Curriculum Progress</span>
-            <span className="text-blue-600 font-extrabold">{auditOutput.completionPercentage}%</span>
+    <div className="space-y-6 animate-in fade-in duration-200">
+      <div className="bg-white border border-slate-200/60 rounded-2xl p-5 shadow-2xs space-y-4">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 border-b border-slate-100 pb-3">
+          <div>
+            <h3 className="text-sm font-black uppercase tracking-wider text-slate-900">Current Semester Course Load Sheet</h3>
+            <p className="text-slate-400 text-[11px] font-medium mt-0.5">Click any grade rating below to mutate or clear marks.</p>
           </div>
-          <div className="w-full bg-slate-200 h-2 rounded-full overflow-hidden">
-            <div className="bg-blue-600 h-full transition-all duration-300" style={{ width: `${auditOutput.completionPercentage}%` }} />
-          </div>
-          <div className="space-y-1.5 pt-1 text-slate-500 text-[11px]">
-            <p className="flex justify-between"><span>Units Earned Mapped</span><span className="font-bold text-slate-900">{auditOutput.unitsEarned} Units</span></p>
-            <p className="flex justify-between"><span>Units Deficient Remaining</span><span className="font-bold text-slate-900">{auditOutput.unitsRemaining} Units</span></p>
-            <p className="flex justify-between"><span>Permitted Credit Boundary</span><span className="font-bold text-slate-900">{minAllowedUnits} – {maxAllowedUnits} Max Units</span></p>
+          <div className="flex gap-2 shrink-0">
+            <button type="button" onClick={() => setIsPopulateModalOpen(true)} className="px-3 py-1.5 border border-slate-200 text-slate-700 hover:bg-slate-50 rounded-xl text-[11px] font-bold flex items-center gap-1.5 shadow-3xs transition-all"><FileSpreadsheet size={13} /> Pre-Load Template</button>
+            <button type="button" onClick={() => setIsSingleSubjectModalOpen(true)} className="px-3 py-1.5 bg-[#7D1924] text-white hover:bg-[#63121b] rounded-xl text-[11px] font-bold flex items-center gap-1.5 shadow-3xs transition-all"><Plus size={13} /> Add Custom Subject</button>
           </div>
           {unitsRemaining > 0 && (
             <div className="pt-2 mt-1 border-t border-slate-200/60 flex justify-between items-center">
@@ -280,233 +369,85 @@ export default function GeneralWorkspaceView({
           )}
         </div>
 
-        <div className="bg-white border rounded-2xl p-4 shadow-3xs space-y-3 text-xs">
-          <div className="flex justify-between items-center border-b pb-2">
-            <h4 className="text-xs font-black text-slate-900 uppercase">Recommended Schedule</h4>
-            <span className="bg-slate-100 text-slate-800 text-[9px] px-2 py-0.5 rounded-full font-black">
-              {semesterSchedule.length} Sem{semesterSchedule.length !== 1 ? 's' : ''} Planned
-            </span>
-          </div>
-          <div className="space-y-3 max-h-72 overflow-y-auto pr-1">
-            {semesterSchedule.length === 0 && (
-              <p className="text-slate-400 text-[11px] font-semibold py-3 text-center">No recommended subjects to schedule.</p>
-            )}
-            {semesterSchedule.map((sem, semIdx) => (
-              <div key={semIdx} className="border border-slate-100 rounded-xl overflow-hidden">
-                <div className="bg-slate-50 px-2.5 py-1.5 flex justify-between items-center">
-                  <span className="font-black text-slate-700 text-[10px] uppercase">{sem.yearLabel ? `${sem.yearLabel} · ${sem.termLabel}` : `Sem ${semIdx + 1} · ${sem.termLabel || `Semester ${semIdx + 1}`}`}</span>
-                  <span className="font-mono font-extrabold text-slate-500 text-[10px]">{sem.totalUnits}u / {maxUnitsPerSemester}u</span>
-                </div>
-                <div className="divide-y divide-slate-50">
-                  {sem.items.map((item, idx) => (
-                    <div key={idx} className="px-2.5 py-1.5 flex items-center justify-between text-[11px]">
-                      <div className="space-y-0.5 max-w-[75%] text-left"><p className="font-bold text-slate-900 truncate">{item.code}</p><p className="text-slate-400 font-semibold truncate text-[10px]">{item.title}</p></div>
-                      <span className="font-extrabold text-slate-500 bg-white border border-slate-100 px-1.5 py-0.5 rounded font-mono">{item.units}u</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
+        <div className="overflow-x-auto rounded-xl border border-slate-100">
+          <table className="w-full text-left text-xs border-collapse">
+            <thead>
+              <tr className="bg-slate-50 text-[10px] font-black text-slate-400 uppercase tracking-wider border-b border-slate-100">
+                <th className="p-3 pl-4 w-[20%]">Subject Code</th>
+                <th className="p-3 w-[45%]">Descriptive Title</th>
+                <th className="p-3 text-center w-[12%]">Units Weight</th>
+                <th className="p-3 text-center w-[15%]">Grade Rating</th>
+                <th className="p-3 pr-4 text-right w-[8%]">Action</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100 font-semibold text-slate-600">
+              {activeSemesterSubjects.length > 0 ? (
+                activeSemesterSubjects.map((sub) => (
+                  <tr key={sub.id} className="hover:bg-slate-50/40 transition-colors">
+                    <td className="p-3 pl-4 font-black text-slate-900 tracking-tight">{sub.subjectCode}</td>
+                    <td className="p-3 text-slate-500 font-medium truncate max-w-[280px]">{sub.subjectTitle}</td>
+                    <td className="p-3 text-center text-slate-950 font-black">{sub.units} U</td>
+                    <td className="p-3 text-center">
+                      {gradingSubjectId === sub.id ? (
+                        <div className="flex items-center justify-center gap-1">
+                          <select value={selectedInlineGrade} onChange={e => setSelectedInlineGrade(e.target.value)} className="border rounded bg-white p-1 text-[11px] font-bold text-slate-900 outline-none">
+                            <option value="In Progress">In Progress</option>
+                            {GRADES_LIST.map(g => <option key={g} value={g}>{g}</option>)}
+                          </select>
+                          <button onClick={() => handleInputGradeSubmit(sub.id)} className="bg-emerald-600 text-white rounded p-1"><Check size={10}/></button>
+                          <button onClick={() => setGradingSubjectId(null)} className="bg-slate-100 border rounded p-1 text-slate-500"><X size={10}/></button>
+                        </div>
+                      ) : (
+                        <span onClick={() => { setGradingSubjectId(sub.id); setSelectedInlineGrade(sub.grade || 'In Progress'); }} className={`cursor-pointer underline font-black ${sub.grade === '5.00' ? 'text-rose-600' : 'text-blue-600'}`}>{sub.grade || 'In Progress'}</span>
+                      )}
+                    </td>
+                    <td className="p-3 pr-4 text-right">
+                      <button type="button" onClick={() => handleDeleteRecord(sub.id)} className="text-slate-400 hover:text-rose-600 p-1"><Trash2 size={13} /></button>
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                <tr><td colSpan="5" className="p-8 text-center text-slate-400 font-medium italic">No active course modules loaded.</td></tr>
+              )}
+            </tbody>
+          </table>
         </div>
       </div>
 
-      <div className="lg:col-span-2 space-y-4">
-
-        {evaluationStrategy === 'returning' && (
-          <div className="border rounded-2xl overflow-hidden bg-white shadow-sm">
-            <div className="bg-slate-50 p-3 border-b flex justify-between items-center">
-              <span className="text-xs font-black text-slate-950 uppercase">Record Previously Taken Subjects</span>
-              <span className="text-[10px] font-bold text-slate-400">{(studentSubjectsHistory || []).length} recorded</span>
-            </div>
-            <div className="p-4 space-y-4">
-              <div className="space-y-3">
-                <div className="grid grid-cols-1 md:grid-cols-[1fr_1fr] gap-2">
-                  <div>
-                    <label className="block text-[10px] font-black text-slate-400 uppercase mb-1">Year</label>
-                    <select
-                      value={selectedYear}
-                      onChange={(e) => setSelectedYear(e.target.value)}
-                      className="w-full border border-slate-200 bg-white p-2.5 rounded-xl text-xs font-bold text-slate-800 outline-none"
-                    >
-                      {YEAR_OPTIONS.map(y => (
-                        <option key={y} value={y}>{y}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-[10px] font-black text-slate-400 uppercase mb-1">Semester</label>
-                    <select
-                      value={selectedSemester}
-                      onChange={(e) => setSelectedSemester(e.target.value)}
-                      className="w-full border border-slate-200 bg-white p-2.5 rounded-xl text-xs font-bold text-slate-800 outline-none"
-                    >
-                      {SEMESTER_OPTIONS.map(s => (
-                        <option key={s} value={s}>{s}</option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-
-                <div className="border border-slate-200 rounded-xl overflow-hidden">
-                  <div className="max-h-56 overflow-y-auto">
-                    <table className="w-full text-[11px]">
-                      <thead className="bg-slate-50 sticky top-0 z-10">
-                        <tr className="text-left text-slate-400 uppercase text-[9px] font-black">
-                          <th className="p-2.5 w-8">
-                            <input
-                              type="checkbox"
-                              checked={availableToAdd.length > 0 && availableToAdd.every(c => selectedCodes.has(getCode(c)))}
-                              onChange={() => toggleAllVisible(availableToAdd)}
-                              className="rounded"
-                            />
-                          </th>
-                          <th className="p-2.5">Code</th>
-                          <th className="p-2.5">Title</th>
-                          <th className="p-2.5">Curriculum</th>
-                          <th className="p-2.5 text-right">Units</th>
-                          <th className="p-2.5 text-right">Grade</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {availableToAdd.length === 0 && (
-                          <tr>
-                            <td colSpan={6} className="p-4 text-center text-slate-400 font-semibold">
-                              No subjects found for this Year / Semester.
-                            </td>
-                          </tr>
-                        )}
-                        {availableToAdd.map((c) => {
-                          const code = getCode(c);
-                          const checked = selectedCodes.has(code);
-                          return (
-                            <tr
-                              key={code}
-                              onClick={() => toggleCode(code)}
-                              className={`cursor-pointer border-t border-slate-100 ${checked ? 'bg-blue-50/60' : 'hover:bg-slate-50'}`}
-                            >
-                              <td className="p-2.5" onClick={(e) => e.stopPropagation()}>
-                                <input
-                                  type="checkbox"
-                                  checked={checked}
-                                  onChange={() => toggleCode(code)}
-                                  className="rounded"
-                                />
-                              </td>
-                              <td className="p-2.5 font-bold text-slate-900">{code}</td>
-                              <td className="p-2.5 text-slate-500 font-semibold">{getTitle(c)}</td>
-                              <td className="p-2.5">
-                                {getCourseCurriculum(c) ? (
-                                  <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full border ${
-                                    getCourseCurriculum(c) === latestCurriculum
-                                      ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                                      : 'bg-amber-50 text-amber-700 border-amber-200'
-                                  }`}>
-                                    {getCourseCurriculum(c) === latestCurriculum ? 'New' : 'Old'} • {getCourseCurriculum(c)}
-                                  </span>
-                                ) : (
-                                  <span className="text-slate-300 text-[10px]">—</span>
-                                )}
-                              </td>
-                              <td className="p-2.5 text-right font-mono font-extrabold text-slate-500">{getUnits(c)}u</td>
-                              <td className="p-2.5 text-right" onClick={(e) => e.stopPropagation()}>
-                                <select
-                                  value={gradesByCode[code] || '1.0'}
-                                  onChange={(e) => setGradeForCode(code, e.target.value)}
-                                  className="border border-slate-200 bg-white p-1.5 rounded-lg text-[11px] font-bold text-slate-800 outline-none"
-                                >
-                                  {GRADE_OPTIONS.map(g => (
-                                    <option key={g} value={g}>{g}</option>
-                                  ))}
-                                </select>
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-
-                <div className="flex justify-end">
-                  <button
-                    type="button"
-                    onClick={handleSubmitTakenSubjects}
-                    disabled={selectedCodes.size === 0 || isAdding}
-                    className="bg-slate-950 hover:bg-slate-850 text-white px-4 py-2.5 rounded-xl flex items-center justify-center gap-1.5 text-xs font-bold shadow-md disabled:opacity-40"
-                  >
-                    <Plus size={14}/> {isAdding ? 'Adding...' : `Add Selected (${selectedCodes.size})`}
-                  </button>
-                </div>
-              </div>
-
-              <div className="space-y-1.5 max-h-56 overflow-y-auto pr-1">
-                {(studentSubjectsHistory || []).length === 0 && (
-                  <p className="text-slate-400 text-[11px] font-semibold py-3 text-center">No previously taken subjects recorded yet.</p>
-                )}
-                {(studentSubjectsHistory || []).map((s) => (
-                  <div key={s.id} className="bg-emerald-50/40 border border-emerald-100 p-2.5 rounded-xl flex items-center justify-between text-[11px]">
-                    <div className="flex items-center gap-2 max-w-[75%]">
-                      <CheckCircle2 size={14} className="text-emerald-600 shrink-0"/>
-                      <div className="space-y-0.5 text-left">
-                        <p className="font-bold text-slate-900 truncate">{s.subjectCode}</p>
-                        <p className="text-slate-400 font-semibold truncate text-[10px]">
-                          {s.subjectTitle} • {s.termSaved || `${s.yearTaken || ''} ${s.semesterTaken || ''}`.trim()} • Grade: {s.grade}
-                          {s.curriculumTrack ? ` • ${s.curriculumTrack}` : ''}
-                        </p>
-                      </div>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => onDeleteManualSubject(s.id)}
-                      className="text-rose-500 hover:text-rose-700 p-1.5 rounded-lg hover:bg-rose-50"
-                    >
-                      <Trash2 size={14}/>
-                    </button>
-                  </div>
-                ))}
-              </div>
-            </div>
+      <div className="bg-white p-5 border border-slate-200 rounded-2xl shadow-2xs space-y-4">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 border-b border-slate-100 pb-3">
+          <h3 className="text-sm font-black uppercase tracking-wider text-slate-900">Academic Progress Requirements Blueprint</h3>
+          <div className="flex bg-slate-100 p-0.5 rounded-xl border gap-0.5">
+            {['completed', 'failed', 'remaining'].map(tab => (
+              <button key={tab} type="button" onClick={() => setRecordReviewTab(tab)} className={`px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-tight transition-all ${recordReviewTab === tab ? 'bg-white text-slate-900 shadow-2xs' : 'text-slate-500'}`}>{tab}</button>
+            ))}
           </div>
-        )}
+        </div>
 
-        <div className="border rounded-2xl overflow-hidden bg-white shadow-sm">
-          <div className="bg-slate-50 p-3 border-b flex justify-between items-center">
-            <span className="text-xs font-black text-slate-950 uppercase">Analysis Logs & Rule Results</span>
-            <span className={`text-[10px] font-black uppercase tracking-wider px-3 py-1 rounded-full border ${
-              auditOutput.overallEligibility === 'ELIGIBLE' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-amber-50 text-amber-700 border-amber-200'
-            }`}>{auditOutput.overallEligibility}</span>
-          </div>
-
-          <div className="p-4 space-y-4">
-            {auditOutput.alerts?.length > 0 && (
-              <div className="space-y-2">
-                {auditOutput.alerts.map((alertText, index) => (
-                  <div key={index} className="bg-amber-50/50 border border-amber-200 text-amber-900 text-xs p-3 rounded-xl flex items-start gap-2.5">
-                    <AlertTriangle size={15} className="text-amber-600 shrink-0 mt-0.5"/><p className="font-semibold leading-relaxed">{alertText}</p>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            <div className="space-y-2 font-semibold">
-              <h4 className="text-xs font-black text-slate-400 uppercase tracking-wide">Target Requirement Checksheet</h4>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-2 max-h-64 overflow-y-auto text-left">
-                {auditOutput.deficiencies?.map((def, idx) => (
-                  <div key={idx} className="bg-rose-50/20 border border-rose-100 p-2.5 rounded-xl flex items-start gap-2 text-[11px]">
-                    <ShieldAlert size={14} className="text-rose-600 shrink-0 mt-0.5"/><p className="text-slate-700 font-semibold leading-relaxed">{def}</p>
-                  </div>
-                ))}
-              </div>
+        <div className="max-h-48 overflow-y-auto">
+          {recordReviewTab === 'completed' && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 text-xs font-bold">
+              {auditOutput.completedSubjectsList?.map((s, idx) => (
+                <div key={idx} className="flex items-center justify-between p-2.5 bg-emerald-50/20 border border-emerald-100/40 rounded-xl">
+                  <CheckCircle size={13} className="text-emerald-600 shrink-0 mr-2" />{s.subjectCode}
+                </div>
+              ))}
             </div>
+          )}
+        </div>
+      </div>
 
-            <div className="flex justify-end gap-2 pt-2 border-t text-xs font-bold">
-              <button type="button" onClick={() => triggerReportModalOpen(evaluationStrategy)} className="border border-slate-200 hover:bg-slate-50 text-slate-800 px-4 py-2 rounded-xl flex items-center gap-1.5"><Printer size={13}/> Preview Checksheet PDF</button>
-              <button type="button" onClick={handleFinalizeEvaluationMatrix} disabled={isSubmitting} className="bg-slate-950 hover:bg-slate-850 text-white px-5 py-2.5 rounded-xl flex items-center gap-1.5 shadow-md">
-                {isSubmitting ? "Finalizing Pipeline..." : "Finalize & Record Evaluation"}
-              </button>
-            </div>
+      <div className="bg-white p-5 border border-slate-200/60 rounded-2xl shadow-2xs flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <div className={`p-3 rounded-xl border ${isEligibleToAdvance ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'}`}><Layers size={20} /></div>
+          <div>
+            <h4 className="text-sm font-black text-slate-900 tracking-tight">Automated Transition Validation Check</h4>
+            <p className="text-slate-400 text-xs font-medium mt-0.5">{isEligibleToAdvance ? 'All loaded subjects are passed. Ready to advance.' : 'Advancement Hold: Student requires passing marks.'}</p>
           </div>
+        </div>
+        <div className="flex items-center gap-2 w-full md:w-auto justify-end">
+          <button type="button" onClick={() => handleTriggerReportModalOpen(evaluationStrategy.toUpperCase())} className="flex items-center gap-1.5 px-4 py-2.5 border rounded-xl text-xs font-black uppercase tracking-wider text-slate-700"><FileText size={14} /> Preview PDF</button>
+          <button type="button" disabled={isSubmitting || !isEligibleToAdvance} onClick={handleFinalizeEvaluationMatrix} className="bg-slate-950 text-white text-xs font-black uppercase tracking-wider px-5 py-2.5 rounded-xl disabled:opacity-40">Commit Semester Advancement</button>
         </div>
       </div>
     </div>
