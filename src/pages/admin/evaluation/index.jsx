@@ -3,6 +3,8 @@ import {
   X, Printer, FileText, LayoutDashboard, ShieldAlert, Award, Sparkles, ClipboardList, CheckCircle2, History, AlertTriangle, User, Calendar, RefreshCw, Check, Ban
 } from 'lucide-react';
 import { useAuth } from '../../../context/AuthContext';
+import CopyOfGradesMatrix from '../../../components/CopyOfGradesMatrix';
+import PlanBridgingView from './components/PlanBridgingView';
 import { evaluationService } from '../../../services/evaluationService';
 import { studentService } from '../../../services/studentService';
 // --- CONFIG & UTILS IMPORT ---
@@ -14,18 +16,30 @@ import { runRegularEvaluation } from './utils/runRegularEvaluation';
 import { runGraduationEvaluation } from './utils/runGraduationEvaluation';
 import { runTransfereeEvaluation } from './utils/runTransfereeEvaluation';
 import { runShifteeEvaluation } from './utils/runShifteeEvaluation';
-import { runCurriculumShiftEvaluation } from './utils/runCurriculumShiftEvaluation';
 import { runReturningStudentEvaluation } from './utils/runReturningStudentEvaluation';
+import { runCurriculumShiftEvaluation } from './utils/runCurriculumShiftEvaluation';
 // --- DECOUPLED CHILD UI LAYOUT IMPORTS ---
 import DashboardOverview from './components/DashboardOverview';
 import GraduationPipelineView from './components/GraduationPipelineView';
 import TransfereeShifteeView from './components/TransfereeShifteeView';
 import GeneralWorkspaceView from './components/GeneralWorkspaceView';
-import CurriculumShiftView from './components/CurriculumShiftView';
-import CourseEntryPanel from './components/CourseEntryPanel';
-import TransferReviewPanel from './components/TransferReviewPanel';
-import { createEntryRow, validateEntries } from './utils/courseEntryValidation';
 import PrintReportModal from './components/PrintReportModal';
+
+// Single source for the six pipeline tracks: drives the dropdown options and the
+// section header, so a label can never drift between the two.
+// `audit` names the track-specific work for the not-yet-implemented notice.
+const EVALUATION_TRACKS = [
+  { value: 'regular', label: 'Regular Evaluation (Semester Checking)', audit: 'Semester checking' },
+  { value: 'graduation', label: 'Graduation Evaluation (Final Checklist Audit)', audit: 'Graduation checklist audit' },
+  { value: 'transferee', label: 'Transferee Evaluation (TOR Comparative Hub)', audit: 'TOR comparative audit' },
+  { value: 'shiftee', label: 'Shiftee Evaluation (BSU Program Comparison)', audit: 'BSU program comparison' },
+  { value: 'curr-shift', label: 'Curriculum Shift Evaluation (Plan Bridging)', audit: 'Plan bridging audit' },
+  { value: 'returning', label: 'Returning Student Evaluation (LOA Progression Resume)', audit: 'LOA progression resume' }
+];
+
+// Tracks with no track-specific audit wired up yet. These render the shared
+// read-only grades base plus an explicit placeholder -- never invented numbers.
+const UNIMPLEMENTED_TRACKS = [];
 
 export default function AdminEvaluationPage() {
   const { user } = useAuth();
@@ -44,6 +58,9 @@ export default function AdminEvaluationPage() {
   // Evaluation Strategy Track Pipeline
   const [evaluationStrategy, setEvaluationStrategy] = useState('regular');
   const [registrarRemarks, setRegistrarRemarks] = useState('');
+  // Guards finalize against a duplicate write once a snapshot has been
+  // committed for this student + pipeline pairing.
+  const [finalizedSnapshotKey, setFinalizedSnapshotKey] = useState('');
   // --- MANUAL OVERRIDES STATE FOR TRANSFEREES ---
   const [manualOverrides, setManualOverrides] = useState({}); // { [extCode]: { action: 'approve'|'reject', bsuCode: string, reason: string } }
   const [overrideForm, setOverrideForm] = useState({ extCode: '', action: 'approve', bsuCode: '', reason: '' });
@@ -209,11 +226,6 @@ export default function AdminEvaluationPage() {
     const val = e.target.value;
     setSelectedStudentId(val);
     setManualOverrides({});
-    // The keyed transcript belongs to the previous student: never carry it across.
-    setBridgingEntries([createEntryRow()]);
-    setBridgingRun(null);
-    setBridgingOverrides({ rejectedMatches: [], manualTransfers: {} });
-    setTransfersConfirmed(false);
     if (!val) {
       setStudentSubjectsHistory([]);
       setRegistrarRemarks('');
@@ -276,15 +288,15 @@ export default function AdminEvaluationPage() {
     }
   };
 
+  const activeTrack = EVALUATION_TRACKS.find(t => t.value === evaluationStrategy) || EVALUATION_TRACKS[0];
+  const isTrackUnimplemented = UNIMPLEMENTED_TRACKS.includes(evaluationStrategy);
+
+  const evaluationSnapshotKey = `${selectedStudentId}::${evaluationStrategy}`;
+  const isCurrentEvaluationFinalized = Boolean(selectedStudentId) && finalizedSnapshotKey === evaluationSnapshotKey;
+
   const handleFinalizeEvaluationMatrix = async () => {
     if (!selectedStudentId || !auditOutput) return;
     if (isCurrentEvaluationFinalized) return;
-    if (evaluationStrategy === 'curr-shift' && isBridgingStale) {
-      return alert('The transcript has changed since this evaluation was run. Re-run the evaluation before finalizing.');
-    }
-    if (evaluationStrategy === 'curr-shift' && !transfersConfirmed) {
-      return alert('Confirm the transfer decisions before finalizing this evaluation.');
-    }
     setIsSubmitting(true);
     try {
       const timestamp = new Date().toISOString();
@@ -334,6 +346,7 @@ export default function AdminEvaluationPage() {
         await Promise.all(batchPromises);
       }
       await addDoc(collection(db, 'evaluation_history'), payload);
+      setFinalizedSnapshotKey(evaluationSnapshotKey);
       alert(`Evaluation completed. Student status finalized as: ${auditOutput.overallEligibility}. Student master record has been synchronized.`);
       await loadPageData();
       if (evaluationStrategy !== 'curr-shift') setModuleView('dashboard');
@@ -428,7 +441,25 @@ export default function AdminEvaluationPage() {
     });
 
     let pipelineResult;
-    if (evaluationStrategy === 'graduation') {
+    if (evaluationStrategy === 'curr-shift') {
+      // Plan bridging reads the student's recorded grades directly -- the engine's
+      // `enteredCourses` contract, sourced from Copy of Grades rather than keyed in.
+      pipelineResult = runCurriculumShiftEvaluation({
+        newSubjectsCatalog,
+        oldSubjectsCatalog,
+        curriculumMappings,
+        enteredCourses: studentSubjectsHistory.map(s => ({
+          courseCode: s.subjectCode,
+          courseTitle: s.subjectTitle,
+          units: s.units,
+          grade: s.grade,
+          academicYear: s.term,
+          semester: s.semester
+        })),
+        studentData: selectedStudentData,
+        creditBoundary: { min: minAllowedUnits, max: maxAllowedUnits }
+      });
+    } else if (evaluationStrategy === 'graduation') {
       pipelineResult = runGraduationEvaluation(catalog, subjectStatuses);
     } else if (evaluationStrategy === 'transferee') {
       pipelineResult = runTransfereeEvaluation(
@@ -601,12 +632,9 @@ export default function AdminEvaluationPage() {
             <div>
               <label className="block text-xs font-bold text-slate-400 uppercase mb-1.5">2. Choose Strategic Evaluation Track Pipeline</label>
               <select value={evaluationStrategy} onChange={e => setEvaluationStrategy(e.target.value)} className="w-full border border-slate-200 bg-white p-3 rounded-xl text-xs font-black text-blue-700 outline-none">
-                <option value="regular">Regular Evaluation (Semester Checking)</option>
-                <option value="graduation">Graduation Evaluation (Final Checklist Audit)</option>
-                <option value="transferee">Transferee Evaluation (TOR Comparative Hub)</option>
-                <option value="shiftee">Shiftee Evaluation (BSU Program Comparison)</option>
-                <option value="curr-shift">Curriculum Shift Evaluation (Plan Bridging)</option>
-                <option value="returning">Returning Student Evaluation (LOA Progression Resume)</option>
+                {EVALUATION_TRACKS.map(track => (
+                  <option key={track.value} value={track.value}>{track.label}</option>
+                ))}
               </select>
             </div>
           </div>
@@ -626,6 +654,36 @@ export default function AdminEvaluationPage() {
                   {auditOutput?.curriculumShifted && ' (Auto-Shifted)'}
                 </span>
               </div>
+            </div>
+          )}
+
+          {/* SHARED READ-ONLY GRADES BASE -- rendered for every track.
+              Keyed by track so switching pipelines remounts it and no collapse
+              state survives from the previous track. */}
+          {selectedStudentData && (
+            <div className="space-y-4 animate-fadeIn">
+              <div className="flex items-center gap-2 pb-1 border-b">
+                <span className="w-1 h-3.5 bg-blue-600 rounded-xs" />
+                <h4 className="font-extrabold text-slate-900 text-xs uppercase tracking-wide">{activeTrack.label}</h4>
+              </div>
+              <CopyOfGradesMatrix
+                key={evaluationStrategy}
+                readOnly
+                subjects={studentSubjectsHistory}
+                fallbackYearLevel={selectedStudentData.yearLevel}
+                subtitle="Read-only academic record grouped by Year Level and Semester."
+                emptyMessage="No course records found for this student."
+              />
+              {evaluationStrategy === 'curr-shift' && auditOutput && (
+                <PlanBridgingView auditOutput={auditOutput} />
+              )}
+              {isTrackUnimplemented && (
+                <div className="text-center py-16 text-slate-400 font-semibold text-xs bg-slate-50 rounded-2xl border border-dashed border-slate-200">
+                  <ClipboardList className="mx-auto text-slate-300 mb-3" size={36} />
+                  <p>{activeTrack.audit} is not yet implemented.</p>
+                  <p className="mt-1 text-slate-300">The grades above are the student's recorded history only. No credited subjects, completion percentage, or required-units math has been computed for this track.</p>
+                </div>
+              )}
             </div>
           )}
 
@@ -688,7 +746,10 @@ export default function AdminEvaluationPage() {
             />
           )}
 
-          {selectedStudentData && evaluationStrategy !== 'transferee' && evaluationStrategy !== 'shiftee' && evaluationStrategy !== 'graduation' && auditOutput && (
+          {/* curr-shift owns its own read-only view (PlanBridgingView) and must not
+              also mount the general workspace: that would render bridging output
+              through a regular-evaluation lens and expose finalize controls. */}
+          {selectedStudentData && !isTrackUnimplemented && evaluationStrategy !== 'curr-shift' && evaluationStrategy !== 'transferee' && evaluationStrategy !== 'shiftee' && evaluationStrategy !== 'graduation' && auditOutput && (
             <GeneralWorkspaceView
               auditOutput={auditOutput}
               minAllowedUnits={minAllowedUnits}

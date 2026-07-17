@@ -1,19 +1,21 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Plus, Search, SlidersHorizontal, ChevronRight, X, Edit3,
   ArrowLeft, Save, User, GraduationCap, BookOpen, CheckCircle2, ShieldAlert, Trash2,
-  Check, AlertCircle, Info, Lock, BookMarked, Calendar, CheckCircle, AlertTriangle,
-  ChevronDown, Layers, FileSpreadsheet
+  AlertCircle, Info, Lock, BookMarked, Calendar, CheckCircle, AlertTriangle,
+  Layers, FileSpreadsheet
 } from 'lucide-react';
 // --- FIREBASE IMPORT ---
 import { db } from '../../../services/firebase';
+import { systemService } from '../../../services/systemService';
+import CopyOfGradesMatrix from '../../../components/CopyOfGradesMatrix';
 import {
   collection, doc, setDoc, updateDoc, addDoc, deleteDoc, query, where, onSnapshot, getDoc
 } from 'firebase/firestore';
 // --- CONFIG & UTILS IMPORT ---
 import {
   checkEnrollmentLimit, getFallbackSubjects, normalizeYear, normalizeSemester, MAX_UNITS_CONFIG,
-  BATSTATEU_GRADES, SEMESTER_LIST, ACADEMIC_YEARS_LIST
+  BATSTATEU_GRADES, SEMESTER_LIST, ACADEMIC_YEARS_LIST, getCurriculumForTerm
 } from '../../../services/curriculumConfig';
 
 const ADMISSION_TYPES = ['Freshman', 'Transferee', 'Shiftee', 'Returnee'];
@@ -42,6 +44,9 @@ export default function StudentManagement() {
   const [error, setError] = useState(null);
   // --- LIVE FIRESTORE CURRICULUM STATES ---
   const [newSubjectsCatalog, setNewSubjectsCatalog] = useState([]);
+  // First-snapshot tracking per catalog, so the manual-entry modal can tell
+  // "still streaming" apart from "genuinely empty".
+  const [catalogsLoaded, setCatalogsLoaded] = useState({ NEW: false, OLD: false });
   const [oldSubjectsCatalog, setOldSubjectsCatalog] = useState([]);
   const [curriculumMappings, setCurriculumMappings] = useState({});
   // --- INTERACTIVE VIEW CONTROLLERS ---
@@ -72,7 +77,6 @@ export default function StudentManagement() {
   const [maxAllowedPreviewUnits, setMaxAllowedPreviewUnits] = useState(21);
 
   // --- SECTIONS EXPAND/COLLAPSE IN COPY OF GRADES ---
-  const [expandedSections, setExpandedSections] = useState({});
 
   // Helper to trigger toast notifications
   const showToast = (message, type = 'success') => {
@@ -88,6 +92,10 @@ export default function StudentManagement() {
     phoneNumber: '', guardianContact: '', admissionDate: new Date().toISOString().split('T')[0], photoUrl: ''
   });
 
+  // The registrar-configured active A.Y. (system_settings/academic), shown read-only
+  // on the Academic Block. Same fallback the dashboard and Settings page use.
+  const [activeAcademicYear, setActiveAcademicYear] = useState('2026-2027');
+
   const [editStudentForm, setEditStudentForm] = useState({
     firstName: '', middleInitial: '', lastName: '', email: '', course: 'BSIT', track: '',
     curriculum: 'NEW', yearLevel: 'First Year', semester: '1st Semester', section: 'A', admissionType: 'Freshman', classification: 'regular', status: 'Active', academicYear: '2026-2027',
@@ -99,16 +107,63 @@ export default function StudentManagement() {
     subjectCode: '', subjectTitle: '', units: 3, term: '2026-2027', yearLevel: 'First Year', semester: '1st Semester', grade: 'In Progress'
   });
 
+  // The catalog the manual-entry modal reads from, chosen purely by its term.
+  // Both catalogs are already streamed above, so this selects rather than refetches.
+  const manualEntryCurriculum = getCurriculumForTerm(newSubjectRecord.term);
+  const isManualCatalogLoading = !catalogsLoaded[manualEntryCurriculum];
+
+  // Layered: term picks the collection, then year level + semester narrow it.
+  // Both sides of every comparison go through the shared normalizers, so UI
+  // labels ('Fourth Year' / '1st Semester') match stored variants ('4th Year',
+  // 'First Semester') without relying on string equality.
+  const manualEntryCatalog = useMemo(() => {
+    const source = manualEntryCurriculum === 'NEW' ? newSubjectsCatalog : oldSubjectsCatalog;
+    const targetYear = normalizeYear(newSubjectRecord.yearLevel);
+    const targetSem = normalizeSemester(newSubjectRecord.semester);
+    return source
+      .filter(sub => {
+        const subYear = normalizeYear(sub.yearLevel || sub.year);
+        // semesterOffered is an array on most docs but a bare string on some;
+        // handlePopulateSemester already has to cope with both.
+        const offered = sub.semesterOffered ?? sub.semester;
+        const matchesSem = Array.isArray(offered)
+          ? offered.some(s => normalizeSemester(s) === targetSem)
+          : normalizeSemester(offered) === targetSem;
+        return subYear === targetYear && matchesSem;
+      })
+      .map(sub => ({
+        // Same defensive field fallbacks the rest of this page already applies,
+        // since documents are not uniformly shaped across the two collections.
+        code: String(sub.courseCode || sub.code || sub.subjectCode || '').toUpperCase(),
+        title: sub.courseTitle || sub.descriptiveTitle || sub.subjectTitle || '',
+        units: parseInt(sub.creditUnits || sub.units || 3, 10)
+      }))
+      .filter(sub => sub.code)
+      .sort((a, b) => a.code.localeCompare(b.code));
+  }, [manualEntryCurriculum, newSubjectsCatalog, oldSubjectsCatalog, newSubjectRecord.yearLevel, newSubjectRecord.semester]);
+
+  // Term, year level and semester are the three controlling fields: changing any
+  // of them invalidates a selection made under the previous scope.
+  const handleManualScopeChange = (patch) => {
+    setNewSubjectRecord(prev => ({ ...prev, ...patch, subjectCode: '', subjectTitle: '', units: 3 }));
+  };
+
+  const handleManualSubjectCodeChange = (code) => {
+    const match = manualEntryCatalog.find(sub => sub.code === code);
+    setNewSubjectRecord(prev => ({
+      ...prev,
+      subjectCode: code,
+      subjectTitle: match ? match.title : '',
+      units: match ? match.units : prev.units
+    }));
+  };
+
   // Semester Template Populater State
   const [populateForm, setPopulateForm] = useState({
     yearLevel: 'First Year', semester: '1st Semester', term: '2026-2027'
   });
 
   // Toggle Section Helper
-  const toggleSection = (sectionKey) => {
-    setExpandedSections(prev => ({ ...prev, [sectionKey]: !prev[sectionKey] }));
-  };
-
   // Side Effect: Auto-reset Track value if Year Level is lower than 3rd Year
   useEffect(() => {
     const numericYear = normalizeYear(newStudent.yearLevel);
@@ -127,6 +182,22 @@ export default function StudentManagement() {
       }
     }
   }, [editStudentForm.yearLevel]);
+
+  // Pull the live active A.Y. so the locked field tracks the registrar's setting
+  // rather than a value hardcoded per page.
+  useEffect(() => {
+    let isMounted = true;
+    const fetchActiveYear = async () => {
+      try {
+        const config = await systemService.getAcademicConfig();
+        if (isMounted && config?.activeYear) setActiveAcademicYear(config.activeYear);
+      } catch (error) {
+        console.error('Failed to load active academic year', error);
+      }
+    };
+    fetchActiveYear();
+    return () => { isMounted = false; };
+  }, []);
 
   // Enforces curriculum timeline profiles
   useEffect(() => {
@@ -188,6 +259,7 @@ export default function StudentManagement() {
       const list = [];
       snapshot.forEach((doc) => { list.push({ code: doc.id, ...doc.data() }); });
       setNewSubjectsCatalog(list);
+      setCatalogsLoaded(prev => ({ ...prev, NEW: true }));
     });
     const unsubOld = onSnapshot(collection(db, 'old_subjects'), (snapshot) => {
       const list = [];
@@ -196,6 +268,7 @@ export default function StudentManagement() {
         list.push({ code: data.courseCode || doc.id, ...data });
       });
       setOldSubjectsCatalog(list);
+      setCatalogsLoaded(prev => ({ ...prev, OLD: true }));
     });
     const unsubMappings = onSnapshot(collection(db, 'curriculum_mappings'), (snapshot) => {
       const mappingObj = {};
@@ -393,30 +466,6 @@ export default function StudentManagement() {
       });
     });
     return structuredStructure;
-  };
-
-  // Group real student grades/courses by Year and Semester for Copy of Grades View (Safe from Null Crashes)
-  const getGroupedGrades = () => {
-    const groups = {};
-    YEAR_LEVELS.forEach(y => {
-      groups[y] = {};
-      SEMESTER_LIST.forEach(s => {
-        groups[y][s] = [];
-      });
-    });
-
-    // Safeguard our loops from processing empty or invalid variables
-    const safeSubjects = (studentSubjects || []).filter(Boolean);
-
-    safeSubjects.forEach(sub => {
-      const y = sub?.yearLevel || selectedStudent?.yearLevel || 'First Year';
-      const s = sub?.semester || '1st Semester';
-      if (!groups[y]) groups[y] = {};
-      if (!groups[y][s]) groups[y][s] = [];
-      groups[y][s].push(sub);
-    });
-
-    return groups;
   };
 
   // Pre-load semester courses template checklist in one click
@@ -636,7 +685,6 @@ export default function StudentManagement() {
     return matchSearch && matchCurr && matchYear && matchStatus && matchAdmin && matchClass && matchTrack;
   });
 
-  const groupedGrades = getGroupedGrades();
 
   return (
     <div className="p-8 bg-[#f8fafc] min-h-screen text-slate-800 font-sans antialiased relative">
@@ -808,105 +856,27 @@ export default function StudentManagement() {
             )}
             {/* --- TAB: COPY OF GRADES --- */}
             {activeTab === 'Copy of Grades' && (
-              <div className="space-y-6 text-left animate-fadeIn">
-                <div className="bg-white p-6 rounded-2xl border flex flex-wrap gap-4 items-center justify-between shadow-sm">
-                  <div>
-                    <h3 className="text-sm font-bold">Copy of Grades Matrix</h3>
-                    <p className="text-slate-400 text-xs mt-0.5">Academic records grouped systematically by Year Level and Semester.</p>
-                  </div>
-                  <div className="flex gap-2">
+              <CopyOfGradesMatrix
+                subjects={studentSubjects}
+                fallbackYearLevel={selectedStudent?.yearLevel}
+                gradingSubjectId={gradingSubjectId}
+                selectedInlineGrade={selectedInlineGrade}
+                onSelectedInlineGradeChange={setSelectedInlineGrade}
+                onStartGrading={(sub) => { setGradingSubjectId(sub.id); setSelectedInlineGrade(sub.grade); }}
+                onSubmitGrade={handleInputGradeSubmit}
+                onCancelGrading={() => setGradingSubjectId(null)}
+                onDeleteRecord={handleDeleteRecord}
+                headerActions={
+                  <>
                     <button onClick={() => setIsPopulateModalOpen(true)} className="px-4 py-1.5 border hover:bg-blue-50 hover:text-blue-600 rounded-lg text-xs font-bold flex items-center gap-1.5 transition">
                       <FileSpreadsheet size={14} /> Populate Semester Form
                     </button>
                     <button onClick={() => setIsManageModalOpen(true)} className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 transition">
                       <Plus size={14} /> Add Single Subject
                     </button>
-                  </div>
-                </div>
-
-                {YEAR_LEVELS.map(year => {
-                  const hasSemesterData = SEMESTER_LIST.some(sem => groupedGrades[year]?.[sem]?.length > 0);
-                  if (!hasSemesterData) return null;
-
-                  return (
-                    <div key={year} className="space-y-4">
-                      <div className="flex items-center gap-2 pb-1 border-b">
-                        <span className="w-1 h-3.5 bg-blue-600 rounded-xs" />
-                        <h4 className="font-extrabold text-slate-900 text-xs uppercase tracking-wide">{year}</h4>
-                      </div>
-
-                      {SEMESTER_LIST.map(sem => {
-                        const subjects = groupedGrades[year]?.[sem] || [];
-                        if (subjects.length === 0) return null;
-
-                        const sectionKey = `${year}-${sem}`;
-                        const isCollapsed = expandedSections[sectionKey] || false;
-
-                        return (
-                          <div key={sem} className="bg-white border rounded-2xl overflow-hidden shadow-xs">
-                            <div
-                              onClick={() => toggleSection(sectionKey)}
-                              className="px-5 py-3.5 bg-slate-50/70 border-b flex items-center justify-between cursor-pointer hover:bg-slate-50 transition"
-                            >
-                              <div className="flex items-center gap-2">
-                                <ChevronDown size={16} className={`text-slate-400 transition-transform ${isCollapsed ? '-rotate-90' : ''}`} />
-                                <span className="font-bold text-slate-800 text-xs">{sem}</span>
-                              </div>
-                              <span className="text-[10px] font-semibold text-slate-500 bg-slate-200/60 px-2.5 py-0.5 rounded-full">
-                                {subjects.length} Course{subjects.length > 1 ? 's' : ''} Record
-                              </span>
-                            </div>
-
-                            {!isCollapsed && (
-                              <div className="overflow-x-auto">
-                                <table className="w-full text-xs text-left">
-                                  <thead>
-                                    <tr className="bg-slate-50/20 text-slate-400 font-bold uppercase tracking-wider border-b text-[10px]">
-                                      <th className="px-6 py-3">Academic Term</th>
-                                      <th className="px-6 py-3">Subject Code</th>
-                                      <th className="px-6 py-3">Descriptive Title</th>
-                                      <th className="px-6 py-3 text-center">Units</th>
-                                      <th className="px-6 py-3 text-center">Grade Rating</th>
-                                      <th className="px-6 py-3 text-right">Actions</th>
-                                    </tr>
-                                  </thead>
-                                  <tbody className="divide-y font-semibold text-slate-600">
-                                    {subjects.map((sub) => {
-                                      if (!sub) return null;
-                                      return (
-                                        <tr key={sub.id} className="hover:bg-slate-50/20">
-                                          <td className="px-6 py-4 text-slate-400">{sub.term}</td>
-                                          <td className="px-6 py-4 font-bold text-slate-900">{sub.subjectCode}</td>
-                                          <td className="px-6 py-4 text-slate-500">{sub.subjectTitle}</td>
-                                          <td className="px-6 py-4 text-center font-bold text-slate-900">{sub.units}</td>
-                                          <td className="px-6 py-4 text-center">
-                                            {gradingSubjectId === sub.id ? (
-                                              <div className="flex items-center justify-center gap-1" onClick={e => e.stopPropagation()}>
-                                                <select value={selectedInlineGrade} onChange={e => setSelectedInlineGrade(e.target.value)} className="border rounded bg-white p-1 text-[11px] font-bold text-slate-900 outline-none"><option value="In Progress">In Progress</option>{BATSTATEU_GRADES.map(g => <option key={g} value={g}>{g}</option>)}</select>
-                                                <button onClick={() => handleInputGradeSubmit(sub.id)} className="bg-emerald-600 text-white rounded p-1"><Check size={10} /></button>
-                                                <button onClick={() => setGradingSubjectId(null)} className="bg-slate-100 rounded p-1 text-slate-500"><X size={10} /></button>
-                                              </div>
-                                            ) : (
-                                              <span onClick={() => { setGradingSubjectId(sub.id); setSelectedInlineGrade(sub.grade); }} className="cursor-pointer underline text-blue-600 font-extrabold">{sub.grade}</span>
-                                            )}
-                                          </td>
-                                          <td className="px-6 py-4 text-right">
-                                            <button onClick={() => handleDeleteRecord(sub.id)} className="text-red-500 hover:text-red-700 text-[11px] font-bold">Remove</button>
-                                          </td>
-                                        </tr>
-                                      );
-                                    })}
-                                  </tbody>
-                                </table>
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  );
-                })}
-              </div>
+                  </>
+                }
+              />
             )}
             {/* --- TAB: SEMESTER PLAN (STRIPPED CLEAN VERSION FOR DIRECT SYSTEM ALIGNMENT) --- */}
             {activeTab === 'Semester Plan' && (
@@ -1113,7 +1083,7 @@ export default function StudentManagement() {
                 </div>
                 <div>
                   <label className="block text-xs font-bold text-slate-400 uppercase mb-1 flex items-center gap-1">
-                    Academic Year *
+                    Started School Year *
                     {newStudent.admissionType === 'Freshman' && <Lock size={12} className="text-slate-400" />}
                   </label>
                   <select
@@ -1125,6 +1095,20 @@ export default function StudentManagement() {
                     {ACADEMIC_YEARS_LIST.map(year => (
                       <option key={year} value={year}>{year}</option>
                     ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-400 uppercase mb-1 flex items-center gap-1">
+                    Academic Year *
+                    <Lock size={12} className="text-slate-400" />
+                  </label>
+                  {/* Read-only mirror of the registrar's active A.Y. (Settings > Academic Year). */}
+                  <select
+                    disabled
+                    value={activeAcademicYear}
+                    className="w-full bg-slate-100 text-slate-500 border border-slate-100 rounded-xl p-2.5 text-xs font-bold outline-none cursor-not-allowed shadow-none"
+                  >
+                    <option value={activeAcademicYear}>{activeAcademicYear}</option>
                   </select>
                 </div>
                 <div>
@@ -1370,13 +1354,58 @@ export default function StudentManagement() {
           <div className="bg-white rounded-2xl p-6 w-full max-w-md border shadow-xl text-left">
             <h3 className="text-sm font-bold text-slate-900 border-b pb-3 mb-4">Manual Course Load Addition Matrix</h3>
             <form onSubmit={handleAddManualSubject} className="space-y-4 text-xs font-semibold">
-              <div><label className="block text-slate-500 mb-1">Subject Code *</label><input type="text" required placeholder="e.g. IT 301" value={newSubjectRecord.subjectCode} onChange={e => setNewSubjectRecord({ ...newSubjectRecord, subjectCode: e.target.value })} className="w-full border p-2.5 rounded-xl outline-none" /></div>
-              <div><label className="block text-slate-500 mb-1">Descriptive Title</label><input type="text" placeholder="e.g. Advanced Networks" value={newSubjectRecord.subjectTitle} onChange={e => setNewSubjectRecord({ ...newSubjectRecord, subjectTitle: e.target.value })} className="w-full border p-2.5 rounded-xl outline-none" /></div>
+              <div>
+                <label className="block text-slate-500 mb-1">Subject Code *</label>
+                <select
+                  required
+                  disabled={isManualCatalogLoading || manualEntryCatalog.length === 0}
+                  value={newSubjectRecord.subjectCode}
+                  onChange={e => handleManualSubjectCodeChange(e.target.value)}
+                  className={`w-full border p-2.5 rounded-xl outline-none font-medium ${isManualCatalogLoading || manualEntryCatalog.length === 0 ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : 'bg-white'}`}
+                >
+                  <option value="">
+                    {isManualCatalogLoading
+                      ? 'Loading subjects...'
+                      : manualEntryCatalog.length === 0
+                        ? `No subjects found for ${newSubjectRecord.yearLevel} - ${newSubjectRecord.semester}`
+                        : 'Select Subject Code'}
+                  </option>
+                  {manualEntryCatalog.map(sub => <option key={sub.code} value={sub.code}>{sub.code}</option>)}
+                </select>
+                {!isManualCatalogLoading && manualEntryCatalog.length === 0 && (
+                  <p className="text-amber-600 mt-1 font-medium">
+                    No subjects found for {newSubjectRecord.yearLevel} - {newSubjectRecord.semester}.
+                  </p>
+                )}
+              </div>
+              <div>
+                <label className="block text-slate-500 mb-1">Descriptive Title</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Advanced Networks"
+                  readOnly={Boolean(newSubjectRecord.subjectCode)}
+                  value={newSubjectRecord.subjectTitle}
+                  onChange={e => setNewSubjectRecord({ ...newSubjectRecord, subjectTitle: e.target.value })}
+                  className={`w-full border p-2.5 rounded-xl outline-none ${newSubjectRecord.subjectCode ? 'bg-slate-100 text-slate-500 cursor-not-allowed' : ''}`}
+                />
+              </div>
               <div className="grid grid-cols-2 gap-3">
-                <div><label className="block text-slate-500 mb-1">Units *</label><input type="number" min={1} max={5} required value={newSubjectRecord.units} onChange={e => setNewSubjectRecord({ ...newSubjectRecord, units: e.target.value })} className="w-full border p-2.5 rounded-xl outline-none" /></div>
+                <div>
+                  <label className="block text-slate-500 mb-1">Units *</label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={5}
+                    required
+                    readOnly={Boolean(newSubjectRecord.subjectCode)}
+                    value={newSubjectRecord.units}
+                    onChange={e => setNewSubjectRecord({ ...newSubjectRecord, units: e.target.value })}
+                    className={`w-full border p-2.5 rounded-xl outline-none ${newSubjectRecord.subjectCode ? 'bg-slate-100 text-slate-500 cursor-not-allowed' : ''}`}
+                  />
+                </div>
                 <div>
                   <label className="block text-slate-500 mb-1">Academic Year Term</label>
-                  <select value={newSubjectRecord.term} onChange={e => setNewSubjectRecord({ ...newSubjectRecord, term: e.target.value })} className="w-full border p-2.5 rounded-xl outline-none bg-white font-medium">
+                  <select value={newSubjectRecord.term} onChange={e => handleManualScopeChange({ term: e.target.value })} className="w-full border p-2.5 rounded-xl outline-none bg-white font-medium">
                     {ACADEMIC_YEARS_LIST.map(y => <option key={y} value={y}>{y}</option>)}
                   </select>
                 </div>
@@ -1384,13 +1413,13 @@ export default function StudentManagement() {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-slate-500 mb-1">Year Level Placement</label>
-                  <select value={newSubjectRecord.yearLevel} onChange={e => setNewSubjectRecord({ ...newSubjectRecord, yearLevel: e.target.value })} className="w-full border p-2.5 rounded-xl outline-none bg-white font-medium">
+                  <select value={newSubjectRecord.yearLevel} onChange={e => handleManualScopeChange({ yearLevel: e.target.value })} className="w-full border p-2.5 rounded-xl outline-none bg-white font-medium">
                     {YEAR_LEVELS.map(y => <option key={y} value={y}>{y}</option>)}
                   </select>
                 </div>
                 <div>
                   <label className="block text-slate-500 mb-1">Target Semester</label>
-                  <select value={newSubjectRecord.semester} onChange={e => setNewSubjectRecord({ ...newSubjectRecord, semester: e.target.value })} className="w-full border p-2.5 rounded-xl outline-none bg-white font-medium">
+                  <select value={newSubjectRecord.semester} onChange={e => handleManualScopeChange({ semester: e.target.value })} className="w-full border p-2.5 rounded-xl outline-none bg-white font-medium">
                     {SEMESTER_LIST.map(s => <option key={s} value={s}>{s}</option>)}
                   </select>
                 </div>

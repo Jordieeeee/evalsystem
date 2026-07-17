@@ -5,9 +5,28 @@
 // the option lists cannot drift apart.
 export const BATSTATEU_GRADES = ['1.00', '1.25', '1.50', '1.75', '2.00', '2.25', '2.50', '2.75', '3.00', '5.00', 'Inc', 'Drop', 'W'];
 export const SEMESTER_LIST = ['1st Semester', '2nd Semester', 'Summer'];
+export const YEAR_LEVELS = ['First Year', 'Second Year', 'Third Year', 'Fourth Year'];
 
 // Grades that do not earn credit toward a curriculum requirement.
 export const NON_PASSING_GRADES = ['5.00', 'INC', 'DROP', 'DRP', 'W'];
+
+// --- CURRICULUM SELECTION BY TERM ---
+// The single threshold deciding which subject catalog a term belongs to. Terms
+// starting on or after this year are NEW curriculum; earlier terms are OLD.
+// Change this one value to move the boundary.
+export const CURRICULUM_CUTOFF_YEAR = 2026;
+
+// Terms are '<start>-<end>' (e.g. '2026-2027'). Always compare the parsed start
+// year as an integer -- string comparison breaks as soon as the format changes.
+export const parseTermStartYear = (term) => parseInt(String(term ?? '').split('-')[0], 10);
+
+// Returns 'NEW' | 'OLD'. An unparseable term falls back to OLD so a malformed
+// value can never silently pull from the current catalog.
+export const getCurriculumForTerm = (term) => {
+  const startYear = parseTermStartYear(term);
+  if (!Number.isFinite(startYear)) return 'OLD';
+  return startYear >= CURRICULUM_CUTOFF_YEAR ? 'NEW' : 'OLD';
+};
 
 // Generate academic year range from 2020-2021 through 2050-2051 (reversed: newest first)
 export const generateAcademicYears = () => {
