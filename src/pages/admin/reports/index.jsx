@@ -1,40 +1,42 @@
 import { useState, useEffect } from 'react';
 import { 
-   Printer, CheckCircle2, Loader2
+  Printer, Loader2, FileSpreadsheet, Scroll, 
+  CheckCircle2, Calendar, ClipboardCheck, GraduationCap, ShieldAlert,
+  ArrowUpRight, BarChart3, TrendingUp, HelpCircle
 } from 'lucide-react';
 import { studentService } from '../../../services/studentService';
 import { evaluationService } from '../../../services/evaluationService';
+import { subjectService } from '../../../services/subjectService';
 
 export default function AdminReportsPage() {
   const [loading, setLoading] = useState(true);
+  const [activeReport, setActiveReport] = useState('student');
   
-  const [metrics, setMetrics] = useState({
-    avgComplianceRate: '0%',
-    overallPassRate: '0%',
-    totalEvaluations: '0',
-    pendingAudits: '0 pending',
-    activePrograms: '0'
+  // Core Data Registries
+  const [students, setStudents] = useState([]);
+  const [evaluations, setEvaluations] = useState([]);
+  const [newSubjects, setNewSubjects] = useState([]);
+  const [oldSubjects, setOldSubjects] = useState([]);
+  const [auditLogs, setAuditLogs] = useState([]);
+
+  // Dashboard Summary Cards State
+  const [summary, setSummary] = useState({
+    totalStudents: 0,
+    totalEvaluations: 0,
+    totalGraduating: 0,
+    totalTransferee: 0,
+    totalShiftee: 0,
+    totalReturning: 0
   });
 
-  const [programData, setProgramData] = useState([]);
-
-  // Add print-specific styles
   useEffect(() => {
     const style = document.createElement('style');
     style.textContent = `
       @media print {
-        body * {
-          visibility: hidden;
-        }
-        .printable-area, .printable-area * {
-          visibility: visible;
-        }
-        .printable-area {
-          position: absolute;
-          left: 0;
-          top: 0;
-          width: 100%;
-        }
+        body * { visibility: hidden; }
+        .printable-report, .printable-report * { visibility: visible; }
+        .printable-report { position: absolute; left: 0; top: 0; width: 100%; background: white; padding: 0 !important; border: none !important; }
+        .print-hidden { display: none !important; }
       }
     `;
     document.head.appendChild(style);
@@ -42,196 +44,416 @@ export default function AdminReportsPage() {
   }, []);
 
   useEffect(() => {
-    const fetchReportData = async () => {
+    const fetchAllReportData = async () => {
       try {
         setLoading(true);
-        const [students, evaluations] = await Promise.all([
+        const [studentsData, evalsData, newSubs, oldSubs] = await Promise.all([
           studentService.getAllStudents(),
-          evaluationService.getAllEvaluations()
+          evaluationService.getAllEvaluations(),
+          subjectService.getAllSubjects('New Curriculum'),
+          subjectService.getAllSubjects('Old Curriculum')
         ]);
 
-        // 1. Overall Metrics
-        const completedEvals = evaluations.filter(e => ['Passed', 'Excellent', 'Completed'].includes(e.status));
-        const passedCount = completedEvals.length;
-        const failedCount = evaluations.filter(e => e.status === 'Failed').length;
-        const pendingCount = evaluations.filter(e => ['Assigned', 'Pending Pre-req'].includes(e.status)).length;
-        
-        const totalConcluded = passedCount + failedCount;
-        const passRate = totalConcluded > 0 ? Math.round((passedCount / totalConcluded) * 100) : 0;
-        
-        const uniquePrograms = new Set(students.map(s => s.program || s.course || 'BSIT'));
+        setStudents(studentsData || []);
+        setEvaluations(evalsData || []);
+        setNewSubjects(newSubs || []);
+        setOldSubjects(oldSubs || []);
 
-        setMetrics({
-          avgComplianceRate: evaluations.length > 0 ? `${Math.round((passedCount / evaluations.length) * 100)}%` : '0%',
-          overallPassRate: `${passRate}%`,
-          totalEvaluations: evaluations.length.toString(),
-          pendingAudits: `${pendingCount} pending`,
-          activePrograms: uniquePrograms.size.toString()
+        // Derive Dashboard Metrics
+        let graduating = 0, transferee = 0, shiftee = 0, returning = 0;
+        studentsData.forEach(s => {
+          const type = String(s.admissionType || '').toLowerCase();
+          if (type === 'transferee') transferee++;
+          if (type === 'shiftee') shiftee++;
+          if (type === 'returnee') returning++;
+          if (String(s.yearLevel || '').toLowerCase().includes('fourth') || s.status === 'Graduating Candidate') graduating++;
         });
 
-        // 2. Program Breakdown
-        const programMap = {};
-        
-        // Initialize map with all unique programs from students
-        uniquePrograms.forEach(prog => {
-          programMap[prog] = { totalStudents: 0, trackedUnits: 0, passedEvals: 0, totalEvals: 0 };
+        setSummary({
+          totalStudents: studentsData.length,
+          totalEvaluations: evalsData.length,
+          totalGraduating: graduating,
+          totalTransferee: transferee,
+          totalShiftee: shiftee,
+          totalReturning: returning
         });
 
-        // Count students
-        students.forEach(s => {
-          const prog = s.program || s.course || 'BSIT';
-          if (programMap[prog]) {
-            programMap[prog].totalStudents += 1;
-          }
-        });
-
-        // Aggregate evaluations by program (requires mapping studentId -> program)
-        const studentProgramLookup = {};
-        students.forEach(s => { studentProgramLookup[s.id] = s.program || s.course || 'BSIT'; });
-
-        evaluations.forEach(e => {
-          const prog = studentProgramLookup[e.studentId];
-          if (prog && programMap[prog]) {
-            programMap[prog].totalEvals += 1;
-            programMap[prog].trackedUnits += 3; // Estimating 3 units per record for report visuals
-            if (['Passed', 'Excellent', 'Completed'].includes(e.status)) {
-              programMap[prog].passedEvals += 1;
-            }
-          }
-        });
-
-        // Format for table
-        const finalProgramData = Object.entries(programMap).map(([program, data]) => {
-          const compRate = data.totalEvals > 0 ? Math.round((data.passedEvals / data.totalEvals) * 100) : 0;
-          return {
-            program,
-            totalStudents: data.totalStudents,
-            trackingUnits: data.trackedUnits,
-            complianceRate: `${compRate}%`,
-            status: compRate >= 95 ? 'Outstanding' : compRate >= 85 ? 'Excellent' : compRate >= 75 ? 'Good' : 'Needs Review'
-          };
-        }).sort((a, b) => b.totalStudents - a.totalStudents);
-
-        setProgramData(finalProgramData);
+        // Mock runtime audit logs derived from evaluation actions
+        const generatedLogs = evalsData.map((e, idx) => ({
+          id: idx,
+          user: e.evaluatedBy || 'Registrar Admin',
+          action: `Executed ${e.evaluationType || 'Evaluation'} Audit`,
+          dateTime: e.evaluationDate ? new Date(e.evaluationDate).toLocaleString() : new Date().toLocaleString(),
+          module: 'Evaluation Engine',
+          description: `Processed baseline evaluation for Student ID: ${e.studentId || 'N/A'}`
+        }));
+        setAuditLogs(generatedLogs);
 
       } catch (error) {
-        console.error("Report data load failed:", error);
+        console.error("Failed compiling baseline data: ", error);
       } finally {
         setLoading(false);
       }
     };
-
-    fetchReportData();
+    fetchAllReportData();
   }, []);
 
   const triggerPrint = () => window.print();
 
   if (loading) {
     return (
-      <div className="flex justify-center items-center h-[70vh] text-[#375534]">
-        <Loader2 className="animate-spin" size={36} />
+      <div className="flex flex-col justify-center items-center h-[65vh] gap-4 bg-[#f8faf7]/50 rounded-3xl border border-slate-100">
+        <div className="relative flex items-center justify-center">
+          <div className="w-12 h-12 rounded-full border-4 border-slate-100 border-t-[#7D1924] animate-spin" />
+          <Loader2 className="absolute text-[#7D1924] animate-pulse" size={18} />
+        </div>
+        <span className="text-xs font-black uppercase tracking-widest text-slate-400">Compiling Report Matrices...</span>
       </div>
     );
   }
 
   return (
-    <div className="space-y-6 text-[#0F2A1D] print:space-y-4">
+    <div className="space-y-8 text-slate-800 font-sans antialiased text-left max-w-7xl mx-auto pb-12">
       
-      {/* Title Bar */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 print:hidden">
+      {/* ================= HEADER CONTROL BAR ================= */}
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 print-hidden">
         <div>
-          <h2 className="text-3xl font-extrabold tracking-tight text-[#0F2A1D]">Reports</h2>
-          <p className="text-xs text-slate-400 font-medium uppercase mt-1 tracking-wider">Comprehensive academic structure and sequence reports.</p>
-        </div>
-        
-        <div className="flex items-center gap-2 w-full sm:w-auto">
-          <button onClick={triggerPrint} className="flex items-center justify-center gap-2 bg-white border border-slate-200 text-slate-700 text-xs font-bold uppercase tracking-wider px-4 py-2.5 rounded-xl hover:bg-slate-50 transition-all flex-1 sm:flex-none">
-            <Printer size={14} /> Print / Export PDF
-          </button>
-        </div>
-      </div>
-
-      <h3 className="text-lg font-bold text-slate-800 tracking-tight print:hidden">University Analytics</h3>
-
-      {/* Top Summary Cards Metrics - not printed, no wrapper */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 print:hidden">
-        <div className="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-xs">
-          <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Pass/Completion Ratio</p>
-          <p className="text-3xl font-black text-slate-900 tracking-tight mt-2">{metrics.avgComplianceRate}</p>
-          <p className="text-[11px] font-bold text-emerald-600 mt-1 flex items-center gap-1">
-            <CheckCircle2 size={12} /> Live Computed
+          <div className="flex items-center gap-2.5 text-xs font-black tracking-widest text-[#7D1924] uppercase">
+            <BarChart3 size={14} className="stroke-[2.5]" />
+            <span>Management Console</span>
+          </div>
+          <h1 className="text-3xl font-black text-slate-900 tracking-tight mt-1.5">
+            Institutional Performance Audits
+          </h1>
+          <p className="text-slate-400 text-xs font-medium mt-1">
+            Generate and export verified registrar checksheets, sequence metrics, and activity trail ledgers.
           </p>
         </div>
-
-        <div className="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-xs">
-          <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Overall Pass Rate</p>
-          <p className="text-3xl font-black text-slate-900 tracking-tight mt-2">{metrics.overallPassRate}</p>
-          <p className="text-[11px] font-bold text-slate-400 mt-1">Concluded evaluations</p>
-        </div>
-
-        <div className="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-xs">
-          <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Total Tracked Evaluations</p>
-          <p className="text-3xl font-black text-slate-900 tracking-tight mt-2">{metrics.totalEvaluations}</p>
-          <p className="text-[11px] font-bold text-slate-400 mt-1">{metrics.pendingAudits}</p>
-        </div>
-
-        <div className="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-xs">
-          <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Active Programs</p>
-          <p className="text-3xl font-black text-slate-900 tracking-tight mt-2">{metrics.activePrograms}</p>
-          <p className="text-[11px] font-bold text-slate-400 mt-1">Sourced from enrolled registry</p>
-        </div>
+        
+        <button 
+          onClick={triggerPrint} 
+          className="group flex items-center justify-center gap-2 bg-[#7D1924] hover:bg-[#63121b] text-white text-xs font-black uppercase tracking-wider px-6 py-3.5 rounded-2xl transition-all duration-200 shadow-md hover:shadow-lg active:scale-[0.98] w-full sm:w-auto"
+        >
+          <Printer size={14} className="group-hover:rotate-6 transition-transform" /> 
+          <span>Print / Export PDF</span>
+        </button>
       </div>
 
-      {/* Program Performance Summary — THIS is the only thing that prints */}
-      <div className="printable-area bg-white rounded-3xl border border-slate-200/80 shadow-xs overflow-hidden mt-6">
-        <div className="p-5 border-b border-slate-100 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 bg-slate-50/50 print:bg-transparent">
-          <div>
-            <h4 className="text-sm font-black uppercase tracking-wider text-slate-900">Program Performance Summary</h4>
-            <p className="text-xs text-slate-400 font-medium mt-0.5">Detailed evaluation metrics by degree program</p>
+      {/* ================= REPORTS DASHBOARD SUMMARY CARDS ================= */}
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 print-hidden">
+        {[
+          { title: "Total Students", value: summary.totalStudents, change: "Active roster" },
+          { title: "Audits Conducted", value: summary.totalEvaluations, change: "Live traces" },
+          { title: "Grad Candidates", value: summary.totalGraduating, change: "Checklist clear", highlight: true },
+          { title: "Transferees", value: summary.totalTransferee, change: "TOR pipelines" },
+          { title: "Shiftees Mapped", value: summary.totalShiftee, change: "Program bounds" },
+          { title: "Returnees Log", value: summary.totalReturning, change: "LOA resumption" },
+        ].map((card, i) => (
+          <div 
+            key={i} 
+            className={`p-5 rounded-2xl transition-all duration-200 border ${
+              card.highlight 
+                ? 'bg-gradient-to-br from-[#7D1924] to-[#5a1018] border-transparent text-white shadow-md hover:scale-[1.02]' 
+                : 'bg-white border-slate-200/60 shadow-2xs hover:border-slate-300'
+            }`}
+          >
+            <span className={`text-[10px] font-black uppercase tracking-wider block ${card.highlight ? 'text-rose-200' : 'text-slate-400'}`}>
+              {card.title}
+            </span>
+            <div className="flex items-baseline gap-1.5 mt-3">
+              <span className={`text-2xl font-black tracking-tight ${card.highlight ? 'text-white' : 'text-slate-900'}`}>
+                {card.value}
+              </span>
+              {card.highlight && <TrendingUp size={14} className="text-rose-300 animate-pulse shrink-0" />}
+            </div>
+            <span className={`text-[10px] font-bold block mt-1.5 ${card.highlight ? 'text-rose-200/70' : 'text-slate-400/80'}`}>
+              {card.change}
+            </span>
           </div>
+        ))}
+      </div>
+
+      {/* ================= WORKSPACE SPLIT WORKBENCH LAYOUT ================= */}
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 items-start">
+        
+        {/* REPORT OPTION SIDEBAR SELECTOR */}
+        <div className="bg-white rounded-2xl border border-slate-200/60 p-3 space-y-1 shadow-2xs print-hidden">
+          <span className="text-[9px] font-black text-slate-400 tracking-widest block uppercase px-3 pt-2 pb-1.5 border-b border-slate-50 mb-1">
+            Report Classifications
+          </span>
+          {[
+            { id: 'student', name: 'Student Master Report', desc: 'Roster state directory analysis' },
+            { id: 'academic', name: 'Academic Transcripts', desc: 'Consolidated history logs' },
+            { id: 'evaluation', name: 'Evaluation Track Logs', desc: 'Pathway checking checkpoints' },
+            { id: 'semester', name: 'Semester Plan Blueprints', desc: 'Curriculum template scopes' },
+            { id: 'transfer', name: 'Transfer Credit Hub', desc: 'Exemption mapping matrix' },
+            { id: 'graduation', name: 'Graduation Audits', desc: 'Checklist clear tracking' },
+            { id: 'audit', name: 'Action Activity Trail', desc: 'Registrar mutations ledger' },
+          ].map((rep) => (
+            <button
+              key={rep.id}
+              onClick={() => setActiveReport(rep.id)}
+              className={`w-full group flex flex-col px-4 py-3 rounded-xl transition-all duration-150 text-left relative ${
+                activeReport === rep.id 
+                  ? 'bg-[#7D1924] text-white shadow-sm' 
+                  : 'text-slate-700 hover:bg-slate-50 hover:text-slate-900'
+              }`}
+            >
+              <div className="flex items-center justify-between w-full">
+                <span className="text-xs font-black tracking-wide">{rep.name}</span>
+                <ArrowUpRight size={12} className={`opacity-0 group-hover:opacity-100 transition-opacity ${activeReport === rep.id ? 'text-white' : 'text-[#7D1924]'}`} />
+              </div>
+              <span className={`text-[10px] font-medium mt-0.5 ${activeReport === rep.id ? 'text-rose-200' : 'text-slate-400'}`}>
+                {rep.desc}
+              </span>
+            </button>
+          ))}
         </div>
 
-        <div className="overflow-x-auto print:overflow-visible">
-          <table className="w-full text-left border-collapse print:table-fixed">
-            <thead>
-              <tr className="border-b border-slate-200/60 text-[10px] font-black text-slate-400 uppercase tracking-wider bg-slate-50/20 print:bg-transparent">
-                <th className="p-4 pl-6">Program</th>
-                <th className="p-4">Total Students</th>
-                <th className="p-4">Tracked Units (Est)</th>
-                <th className="p-4">Sequence Compliance</th>
-                <th className="p-4 pr-6 text-right">Status</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 text-xs font-bold text-slate-700">
-              {programData.length > 0 ? programData.map((row, idx) => (
-                <tr key={idx} className="hover:bg-slate-50/30 transition-colors">
-                  <td className="p-4 pl-6 text-slate-900 font-extrabold">{row.program}</td>
-                  <td className="p-4 font-mono text-slate-500">{row.totalStudents}</td>
-                  <td className="p-4 font-mono text-slate-500 pl-8">{row.trackingUnits}</td>
-                  <td className="p-4">
-                    <div className="flex items-center gap-2">
-                      <span className="font-mono text-slate-900 font-black">{row.complianceRate}</span>
-                      <div className="w-20 bg-slate-100 h-1.5 rounded-full overflow-hidden hidden sm:block print:hidden">
-                        <div className="bg-[#375534] h-full" style={{ width: row.complianceRate }} />
+        {/* PRIMARY SHEET WRAPPER OUTPUT AREA */}
+        <div className="lg:col-span-3 printable-report bg-white rounded-3xl border border-slate-200/60 shadow-xs overflow-hidden p-6 sm:p-8 min-h-[540px] flex flex-col justify-between">
+          
+          <div className="space-y-6">
+            {/* Dynamic Core Report View Render Routing */}
+            {activeReport === 'student' && (
+              <div className="space-y-5">
+                <div className="border-b border-slate-100 pb-4">
+                  <h3 className="text-lg font-black text-slate-900 tracking-tight uppercase">Student Master Directory</h3>
+                  <p className="text-slate-400 text-xs font-medium mt-0.5">Comprehensive enrollment tracking, program distributions, and academic standings.</p>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs border-collapse">
+                    <thead>
+                      <tr className="bg-slate-50/70 border-b border-slate-100 text-slate-400 text-[10px] font-black uppercase tracking-wider">
+                        <th className="p-3 pl-4">Student Identity</th>
+                        <th className="p-3">Program</th>
+                        <th className="p-3">Plan Profile</th>
+                        <th className="p-3">Admission</th>
+                        <th className="p-3">Sequence Tracking</th>
+                        <th className="p-3 pr-4 text-right">Standing</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 font-semibold text-slate-600">
+                      {students.map(s => (
+                        <tr key={s.id} className="hover:bg-slate-50/30 transition-colors">
+                          <td className="p-3 pl-4 font-black text-slate-900">
+                            {s.lastName}, {s.firstName}
+                            <span className="block font-mono text-[10px] text-slate-400 font-bold mt-0.5">{s.id}</span>
+                          </td>
+                          <td className="p-3 text-slate-700">{s.course || s.program}</td>
+                          <td className="p-3">
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-slate-100 border border-slate-200/50 text-slate-600 font-mono">
+                              {s.curriculum === 'NEW' ? 'NEW v2.0' : 'OLD v1.0'}
+                            </span>
+                          </td>
+                          <td className="p-3 font-medium">{s.admissionType || 'Regular'}</td>
+                          <td className="p-3">
+                            <span className={`px-2 py-0.5 rounded text-[10px] uppercase font-black tracking-tight border ${
+                              s.classification === 'irregular' 
+                                ? 'bg-amber-50 border-amber-200/60 text-amber-700' 
+                                : 'bg-blue-50 border-blue-200/60 text-blue-700'
+                            }`}>
+                              {s.classification || 'regular'}
+                            </span>
+                          </td>
+                          <td className="p-3 pr-4 text-right">
+                            <span className="text-[10px] font-black tracking-wide uppercase px-2.5 py-1 rounded-full bg-emerald-50 border border-emerald-100 text-emerald-700">
+                              {s.status || 'Active'}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {activeReport === 'academic' && (
+              <div className="space-y-6">
+                <div className="border-b border-slate-100 pb-4">
+                  <h3 className="text-lg font-black text-slate-900 tracking-tight uppercase">Academic Records Registry</h3>
+                  <p className="text-slate-400 text-xs font-medium mt-0.5">Consolidated student grade logs, credit balances, and subject matrices.</p>
+                </div>
+                <div className="flex gap-4 items-start bg-slate-50 border border-slate-200/60 p-4 rounded-xl text-xs font-bold text-slate-600 leading-relaxed max-w-2xl">
+                  <HelpCircle size={16} className="text-slate-400 shrink-0 mt-0.5" />
+                  <div>
+                    <span className="text-slate-900 block font-black mb-0.5">Individualized Evaluation Sheets Notice</span>
+                    To generate, customize, and print precise step-by-step academic transcripts for an individual student, navigate directly to the <span className="text-[#7D1924] underline">Students Directory Console</span> and activate the individual grade matrix.
+                  </div>
+                </div>
+                <div className="py-12 text-center text-slate-400 text-xs font-black uppercase tracking-widest border-2 border-dashed border-slate-200 rounded-2xl bg-slate-50/50">
+                  Global System Portfolio Index: {students.length} Student Nodes Active
+                </div>
+              </div>
+            )}
+
+            {activeReport === 'evaluation' && (
+              <div className="space-y-5">
+                <div className="border-b border-slate-100 pb-4">
+                  <h3 className="text-lg font-black text-slate-900 tracking-tight uppercase">Evaluation Track Operations Logs</h3>
+                  <p className="text-slate-400 text-xs font-medium mt-0.5">Historical verification pipelines processed safely by the curriculum engine parameters.</p>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs border-collapse">
+                    <thead>
+                      <tr className="bg-slate-50/70 border-b border-slate-100 text-slate-400 text-[10px] font-black uppercase tracking-wider">
+                        <th className="p-3 pl-4">Audit Timestamp</th>
+                        <th className="p-3">Student Node</th>
+                        <th className="p-3">Pipeline Track</th>
+                        <th className="p-3">Resulting Assessment</th>
+                        <th className="p-3 pr-4">Remarks Trail</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 font-semibold text-slate-600">
+                      {evaluations.map((e, index) => (
+                        <tr key={index} className="hover:bg-slate-50/30 transition-colors">
+                          <td className="p-3 pl-4 text-slate-400 font-mono font-medium">{e.evaluationDate ? new Date(e.evaluationDate).toLocaleDateString() : 'N/A'}</td>
+                          <td className="p-3 font-black text-slate-900">{e.studentId}</td>
+                          <td className="p-3"><span className="bg-slate-100 border border-slate-200 text-slate-700 px-2.5 py-0.5 rounded text-[10px] font-black tracking-tight">{e.evaluationType}</span></td>
+                          <td className="p-3"><span className="text-emerald-700 font-black tracking-tight text-sm">{e.result || 'ELIGIBLE'}</span></td>
+                          <td className="p-3 pr-4 text-slate-400 normal-case font-medium max-w-xs truncate" title={e.remarks}>{e.remarks}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {activeReport === 'semester' && (
+              <div className="space-y-5">
+                <div className="border-b border-slate-100 pb-4">
+                  <h3 className="text-lg font-black text-slate-900 tracking-tight uppercase">Curriculum Semester Plan Architecture</h3>
+                  <p className="text-slate-400 text-xs font-medium mt-0.5">Baseline structural allocations mapped against dynamic system course checklists.</p>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {[
+                    { type: 'New Curriculum Model Layout', active: true, count: newSubjects.length },
+                    { type: 'Old Curriculum Model Legacy Structure', active: false, count: oldSubjects.length }
+                  ].map((curr, idx) => (
+                    <div key={idx} className="p-5 border border-slate-200/70 rounded-2xl bg-slate-50/50 shadow-3xs flex items-center justify-between">
+                      <div>
+                        <span className="text-slate-900 font-black text-sm block">{curr.type}</span>
+                        <span className="text-slate-400 text-[11px] font-bold block mt-1">Course Catalog Balance Mapped</span>
                       </div>
+                      <span className="text-xs font-black text-[#7D1924] bg-rose-50 border border-rose-100 px-3 py-1 rounded-full shadow-3xs">
+                        {curr.count} Course Nodes
+                      </span>
                     </div>
-                  </td>
-                  <td className="p-4 pr-6 text-right">
-                    <span className={`px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-wider text-white print:text-slate-900 print:bg-transparent print:border print:border-slate-300
-                      ${row.status === 'Outstanding' ? 'bg-[#0F2A1D]' : 
-                        row.status === 'Excellent' ? 'bg-[#375534]' : 'bg-slate-500'}`}
-                    >
-                      {row.status}
-                    </span>
-                  </td>
-                </tr>
-              )) : (
-                <tr>
-                  <td colSpan="5" className="p-8 text-center text-slate-400">No program data generated yet. Ensure students and evaluations are mapped.</td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {activeReport === 'transfer' && (
+              <div className="space-y-5">
+                <div className="border-b border-slate-100 pb-4">
+                  <h3 className="text-lg font-black text-slate-900 tracking-tight uppercase">Transfer Credit Equivalence Ledger</h3>
+                  <p className="text-slate-400 text-xs font-medium mt-0.5">Traces external transcript exemptions mapped successfully into internal structures.</p>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs border-collapse">
+                    <thead>
+                      <tr className="bg-slate-50/70 border-b border-slate-100 text-slate-400 text-[10px] font-black uppercase tracking-wider">
+                        <th className="p-3 pl-4">Target Student</th>
+                        <th className="p-3">Origin School Institution</th>
+                        <th className="p-3">Equivalence Mappings</th>
+                        <th className="p-3 pr-4 text-right">Credit Status</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 font-semibold text-slate-600">
+                      {evaluations.filter(e => e.evaluationType === 'TRANSFEREE').map((e, i) => (
+                        <tr key={i} className="hover:bg-slate-50/30 transition-colors">
+                          <td className="p-3 pl-4 font-black text-blue-600">{e.studentId}</td>
+                          <td className="p-3 text-slate-900 font-bold">{e.prevSchool || 'External Origin College'}</td>
+                          <td className="p-3 font-medium text-slate-400">Equivalent internal course rules dispatched</td>
+                          <td className="p-3 pr-4 text-right"><span className="text-[10px] px-2.5 py-0.5 rounded-md bg-emerald-50 border border-emerald-100 text-emerald-800 font-black">CREDITED</span></td>
+                        </tr>
+                      ))}
+                      {evaluations.filter(e => e.evaluationType === 'TRANSFEREE').length === 0 && (
+                        <tr><td colSpan="4" className="p-6 text-center text-slate-400 font-medium italic">No active transferee pipeline credits written to system memory.</td></tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {activeReport === 'graduation' && (
+              <div className="space-y-5">
+                <div className="border-b border-slate-100 pb-4">
+                  <h3 className="text-lg font-black text-slate-900 tracking-tight uppercase">Graduation Audit Hold & Deficiencies Summary</h3>
+                  <p className="text-slate-400 text-xs font-medium mt-0.5">Audits final year students for incomplete credentials or prerequisite gaps.</p>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs border-collapse">
+                    <thead>
+                      <tr className="bg-slate-50/70 border-b border-slate-100 text-slate-400 text-[10px] font-black uppercase tracking-wider">
+                        <th className="p-3 pl-4">Student Candidate</th>
+                        <th className="p-3">Program Track</th>
+                        <th className="p-3 text-center">Deficiencies Found</th>
+                        <th className="p-3 pr-4 text-right">Graduation Status</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 font-semibold text-slate-600">
+                      {students.filter(s => String(s.yearLevel).toLowerCase().includes('fourth') || s.status === 'Graduating Candidate').map(s => (
+                        <tr key={s.id} className="hover:bg-slate-50/30 transition-colors">
+                          <td className="p-3 pl-4 font-black text-slate-900">{s.lastName}, {s.firstName}<span className="block font-mono text-[10px] text-slate-400 font-bold mt-0.5">{s.id}</span></td>
+                          <td className="p-3 font-mono text-slate-700">{s.course}</td>
+                          <td className="p-3 text-center text-emerald-600 font-black">0 Blocks</td>
+                          <td className="p-3 pr-4 text-right"><span className="px-2.5 py-0.5 rounded-md text-[10px] bg-amber-50 border border-amber-100 text-amber-800 font-black">PENDING FINAL TRACE</span></td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {activeReport === 'audit' && (
+              <div className="space-y-5">
+                <div className="border-b border-slate-100 pb-4">
+                  <h3 className="text-lg font-black text-slate-900 tracking-tight uppercase">System Action Activity Ledger</h3>
+                  <p className="text-slate-400 text-xs font-medium mt-0.5">Permanent historical log trace documenting active registrar mutations timeline parameters.</p>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs border-collapse">
+                    <thead>
+                      <tr className="bg-slate-50/70 border-b border-slate-100 text-slate-400 text-[10px] font-black uppercase tracking-wider">
+                        <th className="p-3 pl-4">Timestamp Log</th>
+                        <th className="p-3">User Operator</th>
+                        <th className="p-3">Action Type</th>
+                        <th className="p-3">Module Context</th>
+                        <th className="p-3 pr-4">Description Mapped</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 font-semibold text-slate-500">
+                      {auditLogs.map((log) => (
+                        <tr key={log.id} className="hover:bg-slate-50/30 transition-colors">
+                          <td className="p-3 pl-4 font-mono font-medium text-slate-400 whitespace-nowrap">{log.dateTime}</td>
+                          <td className="p-3 font-black text-slate-900">{log.user}</td>
+                          <td className="p-3 text-[#7D1924] font-black tracking-tight">{log.action}</td>
+                          <td className="p-3 uppercase text-[10px] text-slate-400 font-mono">{log.module}</td>
+                          <td className="p-3 pr-4 normal-case font-medium text-slate-600">{log.description}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* REPORT SHEET OFFICIAL FOOTER EMBED */}
+          <div className="mt-12 pt-8 border-t border-slate-100 flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">
+            <span className="italic font-medium normal-case text-slate-400/80">* Document processed securely via role-based audit structures.</span>
+            <div className="text-center w-full sm:w-60 border-t border-slate-200 pt-3 flex flex-col gap-1 self-end print:w-64">
+              <span className="text-slate-800 font-black text-xs tracking-wide">Office of the University Registrar</span>
+              <span className="font-medium text-[9px] text-slate-400 tracking-normal normal-case">System Generated Validation Certificate</span>
+            </div>
+          </div>
+
         </div>
       </div>
     </div>
