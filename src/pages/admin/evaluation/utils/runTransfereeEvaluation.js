@@ -210,10 +210,10 @@ export function runTransfereeEvaluation(
     const rawSemArray = Array.isArray(course.semesterOffered) ? course.semesterOffered : [course.semesterOffered];
     const courseSemIdx = getSemIdx(rawSemArray[0] || course.semester || '1st Semester');
 
-    if (isCredited) {
+if (isCredited) {
       subjectList.push({
-        code: course.courseCode || course.code,
-        title: course.courseTitle || course.title,
+        code: course.courseCode || course.code || course.id || '',
+        title: course.courseTitle || course.title || course.id || '',
         units: unitsValue,
         status: 'Credited',
         grade: creditedList.find(c => normalizeCode(c.code) === codeClean)?.grade || '3.0'
@@ -242,9 +242,9 @@ export function runTransfereeEvaluation(
         return;
       }
 
-      const remainingSub = {
-        code: course.courseCode || course.code,
-        title: course.courseTitle || course.title,
+        const remainingSub = {
+        code: course.courseCode || course.code || course.id || '',
+        title: course.courseTitle || course.title || course.id || '',
         units: unitsValue,
         year: courseYearIdx,
         semester: courseSemIdx,
@@ -275,7 +275,7 @@ export function runTransfereeEvaluation(
       const weightA = a.year * 10 + a.semester;
       const weightB = b.year * 10 + b.semester;
       if (weightA !== weightB) return weightA - weightB;
-      return a.code.localeCompare(b.code);
+      return String(a.code || '').localeCompare(String(b.code || ''));
     });
 
     while (pool.length > 0 && safety < 100) {
@@ -344,7 +344,10 @@ export function runTransfereeEvaluation(
     return plans;
   };
 
-  const recommendedRoadmap = simulateTimeline(remainingPool);
+const recommendedRoadmap = simulateTimeline(remainingPool);
+
+
+
   const unitsEarned = creditedList.reduce((a, c) => a + c.units, 0);
   const unitsRemaining = remainingPool.reduce((a, r) => a + r.units, 0);
   const totalUnitsRequired = catalog.reduce((a, s) => a + parseInt(s.creditUnits || s.units || 3, 10), 0);

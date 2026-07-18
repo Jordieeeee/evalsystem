@@ -307,10 +307,10 @@ export default function TransfereeShifteeView({
                 <ClipboardList size={12} className="text-blue-500" /> Pending Pre-Course Requirements Queue
               </span>
               <div className="flex flex-wrap gap-2 p-3 bg-slate-50 border border-slate-150 rounded-2xl max-h-[110px] overflow-y-auto">
-                {historicalQueue.length > 0 ? (
-                  historicalQueue.map((course, idx) => {
-                    const code = course.courseCode || course.code;
-                    const isCleared = manualTranscriptHistoryOnly.some(s => s.bsuEquivalentCode === code.toUpperCase());
+              {historicalQueue.length > 0 ? (
+                historicalQueue.map((course, idx) => {
+                  const code = course.courseCode || course.code || course.id || '';
+                  const isCleared = manualTranscriptHistoryOnly.some(s => s.bsuEquivalentCode === code.toUpperCase());
                     
                     return (
                       <button

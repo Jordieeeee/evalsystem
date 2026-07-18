@@ -161,7 +161,7 @@ export function runReturningStudentEvaluation(catalog, subjectStatuses, studentI
   let effectiveCatalog = catalog; // default: yung ibinigay na catalog (old)
   let curriculumShifted = false;
 
-  if (yearsGap > LOA_LIMIT_YEARS && curriculumOptions?.newCatalog) {
+if (yearsGap > LOA_LIMIT_YEARS && curriculumOptions?.newCatalog) {
     // Lumagpas na sa 3 years, at may bagong curriculum na -> ishift sa bagong curriculum
     effectiveCatalog = curriculumOptions.newCatalog;
     curriculumShifted = true;
@@ -178,11 +178,67 @@ export function runReturningStudentEvaluation(catalog, subjectStatuses, studentI
     }
   }
 
-  // --- pass 1: units earned/remaining + build the completed-codes set ---
+  // --- translate historical statuses onto the effective catalog ---
+  // subjectStatuses is keyed by the codes the student actually sat the
+  // subject under. If no shift happened, that's the same catalog we're
+  // evaluating, so codes line up as-is. If a shift DID happen,
+  // effectiveCatalog is now the NEW catalog but subjectStatuses is still
+  // keyed by OLD codes — a direct lookup finds nothing. Route through
+  // curriculumMappings first (Tier 1), falling back to a direct code
+  // match (Tier 2) — same tiers runCurriculumShiftEvaluation uses —
+  // before any status lookup happens below.
+  let effectiveSubjectStatuses = subjectStatuses;
+
+  if (curriculumShifted) {
+    const mappings = curriculumOptions?.mappings || curriculumOptions?.curriculumMappings || {};
+    const mappingByOldCode = new Map(
+      Object.entries(mappings).map(([key, value]) => [
+        String(value?.oldCourseCode || key).toUpperCase(),
+        value,
+      ])
+    );
+    const newCatalogCodes = new Set(effectiveCatalog.map((c) => getCode(c)));
+    const oldCatalog = curriculumOptions?.oldCatalog || catalog || [];
+
+    const translated = {};
+    let unmatchedCount = 0;
+
+    oldCatalog.forEach((oldCourse) => {
+      const oldCode = getCode(oldCourse);
+      const oldInfo = subjectStatuses[oldCode];
+      if (!oldInfo || !['Completed', 'Credited'].includes(oldInfo.status)) return;
+
+      // Tier 1: explicit registry mapping to a new-curriculum code.
+      // Tier 2: no mapping on file, code carried over unchanged.
+      const mapping = mappingByOldCode.get(oldCode);
+      const newCode = mapping?.newCourseCode ? String(mapping.newCourseCode).toUpperCase() : oldCode;
+
+      if (newCatalogCodes.has(newCode)) {
+        translated[newCode] = oldInfo;
+      } else {
+        unmatchedCount++;
+      }
+    });
+
+    if (unmatchedCount > 0) {
+      alerts.push(`${unmatchedCount} previously completed subject(s) have no equivalent in the New Curriculum and could not be carried over — verify curriculum mappings.`);
+    }
+
+    effectiveSubjectStatuses = translated;
+  }
+
+// --- pass 1: units earned/remaining + build the completed-codes set ---
+  console.log('=== DEBUG: curriculum shift ===');
+  console.log('curriculumShifted:', curriculumShifted);
+  console.log('curriculumOptions:', curriculumOptions);
+  console.log('subjectStatuses keys:', Object.keys(subjectStatuses));
+  console.log('effectiveSubjectStatuses keys:', Object.keys(effectiveSubjectStatuses));
+  console.log('effectiveCatalog codes:', effectiveCatalog.map(c => getCode(c)));
+
   const completedCodes = new Set();
   effectiveCatalog.forEach((course) => {
     const codeClean = getCode(course);
-    const info = subjectStatuses[codeClean] || { status: 'Not Taken', grade: '-', source: 'BSU' };
+    const info = effectiveSubjectStatuses[codeClean] || { status: 'Not Taken', grade: '-', source: 'BSU' };
     const unitsValue = getUnits(course);
 
     if (['Completed', 'Credited'].includes(info.status)) {
@@ -205,7 +261,7 @@ export function runReturningStudentEvaluation(catalog, subjectStatuses, studentI
 
   const subjectList = effectiveCatalog.map((course) => {
     const codeClean = getCode(course);
-    const info = subjectStatuses[codeClean] || { status: 'Not Taken', grade: '-', source: 'BSU' };
+const info = effectiveSubjectStatuses[codeClean] || { status: 'Not Taken', grade: '-', source: 'BSU' };
     const unitsValue = getUnits(course);
     const { courseCodePrereqs } = splitPrereqs(getPrereqs(course));
     // Only real course-code prerequisites count as "missing" here — a

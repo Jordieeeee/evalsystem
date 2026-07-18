@@ -148,11 +148,7 @@ export default function GeneralWorkspaceView({
   const startYearIndex = normalizeYearLabel(studentYearLevel);
   const startTermIndex = normalizeSemesterLabel(studentSemester);
 
-  console.log('=== DEBUG SCHEDULE START ===');
-  console.log('studentYearLevel prop received:', studentYearLevel);
-  console.log('studentSemester prop received:', studentSemester);
-  console.log('computed startYearIndex:', startYearIndex);
-  console.log('computed startTermIndex:', startTermIndex);
+
 
   const semesterSchedule = (catalog && catalog.length > 0)
     ? buildFullSemesterSchedule(catalog, completedCodesForSchedule, maxUnitsPerSemester, startYearIndex, startTermIndex)

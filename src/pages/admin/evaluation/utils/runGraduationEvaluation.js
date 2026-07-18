@@ -8,7 +8,7 @@ export function runGraduationEvaluation(catalog, subjectStatuses) {
   let totalGradedUnits = 0;
 
   catalog.forEach(course => {
-    const codeClean = (course.courseCode || course.code || '').toUpperCase();
+    const codeClean = (course.courseCode || course.code || course.id || '').toUpperCase();
     const info = subjectStatuses[codeClean] || { status: 'Not Taken', grade: '-', source: 'BSU' };
     const unitsValue = parseInt(course.creditUnits || course.units || 3, 10);
     unitsRequired += unitsValue;

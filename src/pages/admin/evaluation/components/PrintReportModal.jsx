@@ -17,7 +17,7 @@ export default function PrintReportModal({
 
   return (
     <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
-      <div className="bg-slate-200 rounded-3xl shadow-2xl w-full max-w-[850px] my-8 overflow-hidden flex flex-col print:shadow-none print:my-0 print:rounded-none">
+     <div className="bg-slate-200 rounded-3xl shadow-2xl w-full max-w-[850px] my-8 max-h-[85vh] overflow-hidden flex flex-col print:shadow-none print:my-0 print:rounded-none">
 
         {/* Header Controls */}
         <div className="bg-slate-900 text-white p-4 px-6 flex justify-between items-center shrink-0 print:hidden">
@@ -34,7 +34,7 @@ export default function PrintReportModal({
         </div>
 
         {/* Modal Sheet Scroll View (Desktop Screen Render) */}
-        <div className="p-6 overflow-y-auto bg-slate-100 flex-1">
+          <div className="p-6 overflow-y-auto bg-slate-100 flex-1 min-h-0">
 
           <div id="transferee-evaluation-reports-wrapper" className="bg-white p-8 max-w-[8.5in] mx-auto text-black shadow-lg rounded-xl">
 
@@ -219,7 +219,7 @@ export default function PrintReportModal({
 
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
                       {data.recommendedRoadmap && data.recommendedRoadmap.length > 0 ? (
-                        data.recommendedRoadmap.slice(0, 3).map((term, index) => (
+                        data.recommendedRoadmap.map((term, index) => (
                           <div key={index} style={{ border: '1px solid #000000', borderRadius: '4px', overflow: 'hidden' }}>
                             <div style={{ backgroundColor: '#f3f4f6', padding: '6px', borderBottom: '1px solid #000000', fontSize: '9px', fontWeight: 'bold', textTransform: 'uppercase', display: 'flex', justifyContent: 'space-between' }}>
                               <span>{term.term}</span>
