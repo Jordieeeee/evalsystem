@@ -1,4 +1,5 @@
 import { useAuth } from '../../context/AuthContext.jsx';
+import { useStudent } from '../../context/StudentDataContext.jsx';
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useState } from 'react';
 import {
@@ -16,9 +17,11 @@ import universityLogo from '../../assets/logo/logo.png';
 
 const StudentDashboard = () => {
   const { signOut } = useAuth();
+  const { student, displayName, loading: studentLoading } = useStudent();
   const location = useLocation();
   const navigate = useNavigate();
   const [showLogoutModal, setShowLogoutModal] = useState(false);
+  const studentNumber = student?.id || student?.studentId || '';
 
   const handleSignOut = async () => {
     setShowLogoutModal(true);
@@ -79,11 +82,11 @@ const StudentDashboard = () => {
         {/* Operational Profile Utilities without the Notification Bell component */}
         <div className="flex items-center gap-3">
           <div className="text-right leading-none hidden sm:block">
-            <p className="text-xs font-black text-slate-900">John Bautista</p>
-            <p className="text-[10px] font-bold text-slate-400 font-mono tracking-tight mt-1">TLSU-2023-00147</p>
+            <p className="text-xs font-black text-slate-900">{studentLoading ? 'Loading…' : displayName}</p>
+            <p className="text-[10px] font-bold text-slate-400 font-mono tracking-tight mt-1">{studentLoading ? '' : studentNumber}</p>
           </div>
           <div className="w-9 h-9 rounded-full bg-slate-100 text-slate-600 border border-slate-200 font-bold text-xs flex items-center justify-center shadow-2xs">
-            J
+            {studentLoading ? '' : displayName[0]?.toUpperCase()}
           </div>
         </div>
       </header>

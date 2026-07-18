@@ -28,6 +28,17 @@ export const getCurriculumForTerm = (term) => {
   return startYear >= CURRICULUM_CUTOFF_YEAR ? 'NEW' : 'OLD';
 };
 
+// --- TOTAL DEGREE-REQUIRED UNITS ---
+// The denominator for every completion computation (Profile bar, Academic
+// Overview %, unit counts). Derived per student from their academicYear
+// field, never a single hardcoded constant across all students.
+export const TOTAL_REQUIRED_UNITS = { NEW: 204, OLD: 137 };
+
+export const getTotalRequiredUnits = (academicYear) => {
+  const curriculum = getCurriculumForTerm(academicYear);
+  return TOTAL_REQUIRED_UNITS[curriculum];
+};
+
 // Generate academic year range from 2020-2021 through 2050-2051 (reversed: newest first)
 export const generateAcademicYears = () => {
   const startYear = 2020;

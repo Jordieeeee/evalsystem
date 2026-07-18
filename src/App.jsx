@@ -1,5 +1,6 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext.jsx';
+import { StudentDataProvider } from './context/StudentDataContext.jsx';
 import { ProtectedRoute } from './components/ProtectedRoute.jsx';
 
 import LandingPage from './pages/landingpage/LandingPage.jsx';
@@ -61,7 +62,9 @@ function App() {
             path="/student"
             element={
               <ProtectedRoute requiredRole="student">
-                <StudentDashboard />
+                <StudentDataProvider>
+                  <StudentDashboard />
+                </StudentDataProvider>
               </ProtectedRoute>
             }
 
