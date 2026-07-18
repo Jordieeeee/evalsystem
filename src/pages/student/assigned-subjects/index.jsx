@@ -5,17 +5,18 @@ import { studentService } from '../../../services/studentService';
 import LoadingState from '../../../components/LoadingState';
 
 export default function StudentAssignedSubjectsPage() {
-  const { user } = useAuth();
+  const { profile } = useAuth();
   const [subjects, setSubjects] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const fetchRecords = async () => {
-      if (!user?.uid) return;
+      // Records are keyed by SR-Code (profile.id), not the Firebase uid.
+      if (!profile?.id) return;
       try {
         setLoading(true);
-        const { currentSubjects } = await studentService.getAcademicRecords(user.uid);
+        const { currentSubjects } = await studentService.getAcademicRecords(profile.id);
         setSubjects(currentSubjects.map((record) => ({
           code: record.subjectCode,
           name: record.subjectCode,
@@ -31,7 +32,7 @@ export default function StudentAssignedSubjectsPage() {
     };
 
     fetchRecords();
-  }, [user]);
+  }, [profile]);
 
   const filteredSubjects = subjects.filter((subject) =>
     subject.name.toLowerCase().includes(searchQuery.toLowerCase()) ||

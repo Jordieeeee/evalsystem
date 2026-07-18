@@ -5,17 +5,18 @@ import { studentService } from '../../../services/studentService';
 import LoadingState from '../../../components/LoadingState';
 
 export default function StudentEvaluationResultsPage() {
-  const { user } = useAuth();
+  const { profile } = useAuth();
   const [metrics, setMetrics] = useState({ cumulativeGpa: '-', totalCredits: 0 });
   const [evaluations, setEvaluations] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const fetchRecords = async () => {
-      if (!user?.uid) return;
+      // Records are keyed by SR-Code (profile.id), not the Firebase uid.
+      if (!profile?.id) return;
       try {
         setLoading(true);
-        const { completedHistory } = await studentService.getAcademicRecords(user.uid);
+        const { completedHistory } = await studentService.getAcademicRecords(profile.id);
         const passedCount = completedHistory.filter((record) => record.status === 'Passed' || record.status === 'Excellent').length;
         setMetrics({
           cumulativeGpa: passedCount > 0 ? (passedCount / Math.max(completedHistory.length, 1)).toFixed(2) : '-',
@@ -36,7 +37,7 @@ export default function StudentEvaluationResultsPage() {
     };
 
     fetchRecords();
-  }, [user]);
+  }, [profile]);
 
   if (loading) {
     return (

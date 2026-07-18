@@ -4,6 +4,7 @@ import { ProtectedRoute } from './components/ProtectedRoute.jsx';
 
 import LandingPage from './pages/landingpage/LandingPage.jsx';
 import LoginPage from './pages/login/LoginPage.jsx';
+import RegisterPage from './pages/register/RegisterPage.jsx';
 import NotFound from './pages/error/NotFound.jsx';
 
 // Core Parent Dashboard Shell Layout Components
@@ -33,6 +34,7 @@ function App() {
           {/* Public Landing & Authentication Views */}
           <Route path="/" element={<LandingPage />} />
           <Route path="/login" element={<LoginPage />} />
+          <Route path="/register" element={<RegisterPage />} />
 
           {/* Admin layout with structural sub-routes nested inside */}
           <Route

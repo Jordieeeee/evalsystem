@@ -8,6 +8,19 @@ export const studentService = {
     return snap.exists() ? { id: snap.id, ...snap.data() } : null;
   },
 
+  // Self-registered students are keyed by SR-Code (students/{srCode}), not by
+  // their Firebase Auth uid, so looking a profile up after sign-in means querying
+  // for the doc whose `uid` field matches the signed-in user rather than doc-id
+  // lookup. This exact `uid == request.auth.uid` shape is what firestore.rules
+  // allows a signed-in student to read, so the query is rule-compatible.
+  getProfileByUid: async (uid) => {
+    const q = query(collection(db, 'students'), where('uid', '==', uid));
+    const snapshot = await getDocs(q);
+    if (snapshot.empty) return null;
+    const match = snapshot.docs[0];
+    return { id: match.id, ...match.data() };
+  },
+
   createStudentProfile: async (studentId, payload = {}) => {
     const docId = payload.docId || studentId;
     const docRef = doc(db, 'students', docId);

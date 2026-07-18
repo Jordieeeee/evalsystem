@@ -13,12 +13,15 @@ export default function StudentDashboardTab() {
 
   useEffect(() => {
     const fetchStudentData = async () => {
-      if (!user?.uid) return;
+      // Academic records are keyed by SR-Code (profile.id), not the Firebase
+      // uid — self-registered students only get a `profile` once AuthContext
+      // resolves their claimed students/{srCode} doc.
+      if (!profile?.id) return;
 
       try {
         setLoading(true);
         const { currentSubjects: active, completedHistory: history } =
-          await studentService.getAcademicRecords(user.uid);
+          await studentService.getAcademicRecords(profile.id);
 
         setCurrentSubjects(active);
         setCompletedHistory(history);
@@ -30,7 +33,7 @@ export default function StudentDashboardTab() {
     };
 
     fetchStudentData();
-  }, [user]);
+  }, [profile]);
 
   if (loading) {
     return (

@@ -22,10 +22,11 @@ export default function StudentReportsPage() {
 
   useEffect(() => {
     const fetchReports = async () => {
-      if (!user?.uid) return;
+      // Records are keyed by SR-Code (profile.id), not the Firebase uid.
+      if (!profile?.id) return;
       try {
         setLoading(true);
-        const { currentSubjects, completedHistory } = await studentService.getAcademicRecords(user.uid);
+        const { currentSubjects, completedHistory } = await studentService.getAcademicRecords(profile.id);
         const records = [...currentSubjects, ...completedHistory].map((record) => ({
           code: record.subjectCode,
           name: record.subjectCode,

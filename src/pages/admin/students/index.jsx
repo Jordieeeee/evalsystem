@@ -11,6 +11,7 @@ import { systemService } from '../../../services/systemService';
 import CopyOfGradesMatrix from '../../../components/CopyOfGradesMatrix';
 import LoadingState from '../../../components/LoadingState';
 import { useSystemSettings } from '../../../hooks/useSystemSettings';
+import { deriveEmail, isValidSrCode } from '../../../utils/studentAuth';
 import {
   collection, doc, setDoc, updateDoc, addDoc, deleteDoc, query, where, onSnapshot, getDoc
 } from 'firebase/firestore';
@@ -540,8 +541,12 @@ export default function StudentManagement() {
   const handleAddStudent = async (e) => {
     e.preventDefault();
     if (!newStudent.studentId) return;
-    if (!newStudent.email.toLowerCase().endsWith('@g.tlsu.edu.ph')) {
-      showToast("Registration rejected. Email must use domain: @g.tlsu.edu.ph", "error");
+    // Email is never hand-typed — it's always derived from the SR-Code so it
+    // matches exactly what Firebase Auth will issue when the student later
+    // claims their account. firestore.rules checks this equality at claim time,
+    // so a mismatch here would permanently lock the student out of claiming.
+    if (!isValidSrCode(newStudent.studentId)) {
+      showToast("Registration rejected. SR-Code must match the format YY-NNNNN (e.g. 23-08214).", "error");
       return;
     }
     const startYear = parseInt(newStudent.academicYear.split('-')[0], 10);
@@ -561,7 +566,18 @@ export default function StudentManagement() {
     if (!isUnique) { showToast("Duplicate SR-Code detected.", "error"); return; }
     try {
       const timestamp = new Date().toISOString();
-      await setDoc(doc(db, 'students', newStudent.studentId), { ...newStudent, createdAt: timestamp, updatedAt: timestamp, id: newStudent.studentId });
+      await setDoc(doc(db, 'students', newStudent.studentId), {
+        ...newStudent,
+        email: deriveEmail(newStudent.studentId),
+        // Admit-time state for the self-registration ("claim account") flow: no
+        // Auth uid is linked yet, and the record cannot be claimed a second time
+        // once claimed flips to true. See RegisterPage / registrationService.js.
+        uid: null,
+        claimed: false,
+        createdAt: timestamp,
+        updatedAt: timestamp,
+        id: newStudent.studentId
+      });
 
       for (const course of previewCourseLoad) {
         await addDoc(collection(db, 'studentSubjects'), {
@@ -1171,12 +1187,18 @@ export default function StudentManagement() {
                   {srCodeError && <p className="text-red-500 mt-1 text-[11px] font-bold">{srCodeError}</p>}
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Official Email Address *</label>
+                  <label className="block text-xs font-bold text-slate-400 uppercase mb-1 flex items-center gap-1">
+                    Official Email Address *
+                    <Lock size={12} className="text-slate-400" />
+                  </label>
+                  {/* Never hand-typed — always derived from the SR-Code so it's
+                      guaranteed to match the email the student's claim flow will
+                      derive and Firebase Auth will issue. */}
                   <input
-                    type="text" required placeholder="username@g.tlsu.edu.ph"
-                    value={newStudent.email}
-                    onChange={e => setNewStudent({ ...newStudent, email: e.target.value.trim() })}
-                    className="w-full bg-slate-50 border rounded-xl p-2.5 text-xs outline-none focus:ring-1 focus:ring-blue-500"
+                    type="text" disabled
+                    value={newStudent.studentId ? deriveEmail(newStudent.studentId) : ''}
+                    placeholder="Derived automatically from SR-Code"
+                    className="w-full bg-slate-100 text-slate-500 border border-slate-100 rounded-xl p-2.5 text-xs outline-none cursor-not-allowed shadow-none"
                   />
                 </div>
                 <div className="grid grid-cols-3 gap-3 md:col-span-2">

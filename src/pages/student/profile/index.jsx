@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useMemo } from 'react';
 import {
   Edit2,
   ShieldAlert,
@@ -9,65 +9,55 @@ import {
   GraduationCap
 } from 'lucide-react';
 import { useAuth } from '../../../context/AuthContext';
-import { studentService } from '../../../services/studentService';
 import LoadingState from '../../../components/LoadingState';
 
 export default function StudentProfilePage() {
-  const { user } = useAuth();
-  const [studentInfo, setStudentInfo] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const { user, profile } = useAuth();
 
-  useEffect(() => {
-    const fetchProfile = async () => {
-      if (!user?.uid) return;
-      try {
-        setLoading(true);
-        const profile = await studentService.getProfile(user.uid);
-        if (profile) {
-          setStudentInfo({
-            ...profile,
-            name: profile.name || user.displayName || user.email?.split('@')[0] || 'Student',
-            id: profile.studentId || profile.id || user.uid,
-            classification: profile.classification || 'REGULAR',
-            program: profile.program || profile.course || 'BSIT',
-            yearSection: profile.yearSection || `${profile.year || '1'}${profile.year ? 'st' : ''} Year`,
-            academicYear: profile.academicYear || '2025–2026',
-            semester: profile.semester || '1st Semester',
-            email: profile.email || user.email || '',
-            contactNumber: profile.contactNumber || '-',
-            address: profile.address || '-',
-            completionPercentage: profile.completionPercentage || 0,
-            earnedUnits: profile.earnedUnits || 0,
-            requiredUnits: profile.requiredUnits || 180
-          });
-        } else {
-          setStudentInfo({
-            name: user.displayName || user.email?.split('@')[0] || 'Student',
-            id: user.uid,
-            classification: 'REGULAR',
-            program: 'BSIT',
-            yearSection: '1st Year',
-            academicYear: '2025–2026',
-            semester: '1st Semester',
-            email: user.email || '',
-            contactNumber: '-',
-            address: '-',
-            completionPercentage: 0,
-            earnedUnits: 0,
-            requiredUnits: 180
-          });
-        }
-      } catch (error) {
-        console.error('Failed to load student profile', error);
-      } finally {
-        setLoading(false);
-      }
-    };
+  // Records are keyed by SR-Code (students/{srCode}), not the Firebase uid, so
+  // this derives from the profile AuthContext already resolved via
+  // studentService.getProfileByUid at login rather than re-fetching by uid as a
+  // doc id (which would look up the wrong document).
+  const studentInfo = useMemo(() => {
+    if (profile) {
+      return {
+        ...profile,
+        name: profile.name || `${profile.firstName || ''} ${profile.lastName || ''}`.trim() || user?.displayName || user?.email?.split('@')[0] || 'Student',
+        id: profile.studentId || profile.id || user?.uid,
+        classification: profile.classification || 'REGULAR',
+        program: profile.program || profile.course || 'BSIT',
+        yearSection: profile.yearSection || profile.yearLevel || `${profile.year || '1'}${profile.year ? 'st' : ''} Year`,
+        academicYear: profile.academicYear || '2025–2026',
+        semester: profile.semester || '1st Semester',
+        email: profile.email || user?.email || '',
+        contactNumber: profile.contactNumber || profile.phoneNumber || '-',
+        address: profile.address || '-',
+        completionPercentage: profile.completionPercentage || 0,
+        earnedUnits: profile.earnedUnits || 0,
+        requiredUnits: profile.requiredUnits || 180
+      };
+    }
+    if (user) {
+      return {
+        name: user.displayName || user.email?.split('@')[0] || 'Student',
+        id: user.uid,
+        classification: 'REGULAR',
+        program: 'BSIT',
+        yearSection: '1st Year',
+        academicYear: '2025–2026',
+        semester: '1st Semester',
+        email: user.email || '',
+        contactNumber: '-',
+        address: '-',
+        completionPercentage: 0,
+        earnedUnits: 0,
+        requiredUnits: 180
+      };
+    }
+    return null;
+  }, [user, profile]);
 
-    fetchProfile();
-  }, [user]);
-
-  if (loading || !studentInfo) {
+  if (!studentInfo) {
     return (
       <LoadingState label="Loading Your Profile..." accent="#375534" />
     );

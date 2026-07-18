@@ -1,19 +1,48 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext.jsx';
-import { signIn } from '../../services/authService.js';
+import { claimStudentAccount, ClaimRejectedError } from '../../services/registrationService.js';
+import { isValidSrCode, isPasswordLongEnough, deriveEmail } from '../../utils/studentAuth.js';
 import { Button } from '../../components/ui/Button.jsx';
 import { ErrorMessage } from '../../components/ui/ErrorMessage.jsx';
 import logoImg from '../../assets/logo/logo.png';
 import tlsuschool from '../../assets/landingpage/tlsuschool.png';
 
-const LoginPage = () => {
-  const [email, setEmail] = useState('');
+// Maps Firebase Auth error codes and our own ClaimRejectedError codes to the
+// copy a student should see. Kept out of the JSX so the reject-case wording
+// required by spec ("No admitted record — contact the registrar.",
+// "Account already claimed.") lives in exactly one place.
+const describeClaimError = (err) => {
+  if (err instanceof ClaimRejectedError) {
+    return err.message;
+  }
+  switch (err?.code) {
+    case 'auth/email-already-in-use':
+      // Could mean genuinely already claimed, OR an orphaned Auth account left
+      // behind by a previous claim attempt whose Firestore write failed — see
+      // the KNOWN LIMITATIONS note in registrationService.js. Either way the
+      // student can't self-serve past this; the registrar has to look.
+      return 'This account already exists. If you already claimed it, try signing in. Otherwise, contact the registrar.';
+    case 'auth/weak-password':
+      return 'Password is too weak. Please choose a stronger password.';
+    case 'auth/network-request-failed':
+      return 'Network error. Please check your connection and try again.';
+    default:
+      return 'Something went wrong while creating your account. Please try again.';
+  }
+};
+
+const RegisterPage = () => {
+  const [srCode, setSrCode] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [error, setError] = useState(null);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [fieldErrors, setFieldErrors] = useState({});
+  const [formError, setFormError] = useState(null);
   const [loading, setLoading] = useState(false);
-  const { role, authError, loading: authLoading, clearAuthError } = useAuth();
+
+  const { role, loading: authLoading } = useAuth();
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -24,25 +53,45 @@ const LoginPage = () => {
     }
   }, [role, navigate]);
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setError(null);
-    clearAuthError();
-    setLoading(true);
+  const validate = () => {
+    const errors = {};
+    if (!isValidSrCode(srCode)) {
+      errors.srCode = 'Enter a valid SR-Code, e.g. 23-08214.';
+    }
+    if (!isPasswordLongEnough(password)) {
+      errors.password = 'Password must be at least 8 characters.';
+    }
+    if (confirmPassword !== password) {
+      errors.confirmPassword = 'Passwords do not match.';
+    }
+    setFieldErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
 
+  const handleClaim = async () => {
+    setFormError(null);
+    if (!validate()) return;
+
+    setLoading(true);
     try {
-      await signIn(email, password);
-      // After successful sign-in, AuthContext will handle role fetching and redirect
+      await claimStudentAccount(srCode.trim(), password);
+      // Success routes through AuthContext: createUserWithEmailAndPassword signs
+      // the new user in, onAuthStateChanged picks it up, resolves role: 'student'
+      // from the just-claimed students/{srCode} doc, and the effect above navigates.
     } catch (err) {
-      setError('Failed to sign in. Please check your email and password.');
+      setFormError(describeClaimError(err));
       setLoading(false);
     }
   };
 
-  const handleInputChange = () => {
-    setError(null);
-    clearAuthError();
+  const handleKeyDown = (e) => {
+    if (e.key === 'Enter' && !loading) {
+      handleClaim();
+    }
   };
+
+  const trimmedSrCode = srCode.trim();
+  const emailPreview = isValidSrCode(trimmedSrCode) ? deriveEmail(trimmedSrCode) : null;
 
   if (authLoading) {
     return (
@@ -72,58 +121,25 @@ const LoginPage = () => {
       </div>
       <style>{`
         @keyframes fadeInScaleUp {
-          from {
-            opacity: 0;
-            transform: scale(0.97) skewY(-12deg) scaleY(1.5);
-          }
-          to {
-            opacity: 1;
-            transform: scale(1) skewY(-12deg) scaleY(1.5);
-          }
+          from { opacity: 0; transform: scale(0.97) skewY(-12deg) scaleY(1.5); }
+          to { opacity: 1; transform: scale(1) skewY(-12deg) scaleY(1.5); }
         }
         @keyframes fadeInSlideUp {
-          from {
-            opacity: 0;
-            transform: translateY(12px);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0);
-          }
+          from { opacity: 0; transform: translateY(12px); }
+          to { opacity: 1; transform: translateY(0); }
         }
         @keyframes fadeInSimple {
-          from {
-            opacity: 0;
-          }
-          to {
-            opacity: 1;
-          }
+          from { opacity: 0; }
+          to { opacity: 1; }
         }
-        
-        .animate-fade-in-scale-up {
-          animation: fadeInScaleUp 400ms cubic-bezier(0.16, 1, 0.3, 1) 50ms forwards;
-        }
-        .animate-fade-in-slide-up {
-          animation: fadeInSlideUp 400ms cubic-bezier(0.16, 1, 0.3, 1) 150ms forwards;
-        }
-        .animate-fade-in-simple {
-          animation: fadeInSimple 400ms cubic-bezier(0.16, 1, 0.3, 1) 400ms forwards;
-        }
-
+        .animate-fade-in-scale-up { animation: fadeInScaleUp 400ms cubic-bezier(0.16, 1, 0.3, 1) 50ms forwards; }
+        .animate-fade-in-slide-up { animation: fadeInSlideUp 400ms cubic-bezier(0.16, 1, 0.3, 1) 150ms forwards; }
+        .animate-fade-in-simple { animation: fadeInSimple 400ms cubic-bezier(0.16, 1, 0.3, 1) 400ms forwards; }
         @media (prefers-reduced-motion: reduce) {
-          .animate-fade-in-scale-up,
-          .animate-fade-in-slide-up,
-          .animate-fade-in-simple,
-          .transition-all,
-          .transition-transform {
-            animation: none !important;
-            transition: none !important;
-            opacity: 1 !important;
-            transform: none !important;
+          .animate-fade-in-scale-up, .animate-fade-in-slide-up, .animate-fade-in-simple, .transition-all, .transition-transform {
+            animation: none !important; transition: none !important; opacity: 1 !important; transform: none !important;
           }
-          .animate-fade-in-scale-up {
-            transform: skewY(-12deg) scaleY(1.5) !important;
-          }
+          .animate-fade-in-scale-up { transform: skewY(-12deg) scaleY(1.5) !important; }
         }
       `}</style>
 
@@ -147,7 +163,6 @@ const LoginPage = () => {
           </div>
 
           <div className="relative z-10 flex flex-col h-full justify-between">
-            {/* Institutional Branding */}
             <div className="flex items-center space-x-3">
               <img src={logoImg} alt="The Last Salle University Crest" className="h-28 w-28 object-contain" />
               <div>
@@ -162,10 +177,10 @@ const LoginPage = () => {
 
             <div className="mt-8 md:mt-0">
               <h2 className="font-serif text-lg font-bold tracking-tight block leading-tight">
-                Fostering Academic Excellence
+                Claim Your Student Account
               </h2>
               <p className="font-serif text-lg font-bold tracking-tight block leading-tight text-sage-300/90 mt-2 max-w-xs leading-relaxed">
-                Secure portal for role-based academic evaluations, administrative reviews, and institutional feedback.
+                Your record was admitted by the Registrar. Set a password once to activate self-service access to your evaluation records.
               </p>
             </div>
           </div>
@@ -173,18 +188,12 @@ const LoginPage = () => {
 
         {/* Right Panel: Form Panel */}
         <div className="relative w-full md:w-1/2 bg-white flex flex-col justify-center p-8 md:p-12">
-          {/* Wavy Divider - visible only on medium screens and up */}
           <div className="hidden md:block absolute top-0 bottom-0 -left-12 w-12 overflow-hidden pointer-events-none">
-            <svg
-              className="h-full w-full text-white fill-current"
-              viewBox="0 0 100 100"
-              preserveAspectRatio="none"
-            >
+            <svg className="h-full w-full text-white fill-current" viewBox="0 0 100 100" preserveAspectRatio="none">
               <path d="M100,0 Q 0,25 50,50 T 100,100 Z" />
             </svg>
           </div>
 
-          {/* Back Button */}
           <button
             onClick={() => navigate('/')}
             className="absolute top-4 left-4 md:top-6 md:left-6 z-20 flex items-center space-x-2 text-forest-700 hover:text-forest-950 transition-colors duration-200"
@@ -195,43 +204,47 @@ const LoginPage = () => {
             <span className="font-serif text-lg font-bold tracking-tight block leading-tight">Back</span>
           </button>
 
-          <div className="relative z-10 max-w-sm w-full mx-auto">
+          <div className="relative z-10 max-w-sm w-full mx-auto" onKeyDown={handleKeyDown}>
             <div className="text-center md:text-left mb-8">
               <h3 className="font-serif text-3xl font-bold tracking-tight block leading-tight text-forest-950">
-                Welcome Back
+                Claim Your Account
               </h3>
               <p className="font-serif text-md font-bold tracking-tight block leading-tight text-forest-700/70 mt-1">
-                Sign in to access the Evaluation System
+                First time here? Set your password to activate access.
               </p>
             </div>
 
-            {authError && <ErrorMessage message={authError} />}
-
-            <form onSubmit={handleSubmit} className="space-y-5">
-              {/* Email Input */}
+            <div className="space-y-5">
+              {/* SR-Code Input */}
               <div className="flex flex-col">
-                <label htmlFor="email" className="mb-1.5 font-serif text-sm font-bold tracking-tight block leading-tight text-forest-700">
-                  School Email
+                <label htmlFor="srCode" className="mb-1.5 font-serif text-sm font-bold tracking-tight block leading-tight text-forest-700">
+                  SR-Code
                 </label>
                 <div className="relative">
                   <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-sage-500">
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
                     </svg>
                   </span>
                   <input
-                    type="email"
-                    id="email"
-                    placeholder="username@tlsu.edu.ph"
-                    value={email}
+                    type="text"
+                    id="srCode"
+                    placeholder="23-08214"
+                    value={srCode}
                     onChange={(e) => {
-                      setEmail(e.target.value);
-                      handleInputChange();
+                      setSrCode(e.target.value);
+                      setFormError(null);
+                      setFieldErrors((prev) => ({ ...prev, srCode: undefined }));
                     }}
                     required
                     className="w-full pl-10 pr-4 py-3 border border-sage-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-sage-500 focus:border-sage-500 text-sm bg-cream-100/20 text-forest-950 placeholder-forest-950/30 transition-all duration-200"
                   />
                 </div>
+                {fieldErrors.srCode ? (
+                  <p className="mt-1.5 text-xs font-semibold text-red-600">{fieldErrors.srCode}</p>
+                ) : emailPreview ? (
+                  <p className="mt-1.5 text-xs text-forest-700/60">Account email: <span className="font-semibold text-forest-700">{emailPreview}</span></p>
+                ) : null}
               </div>
 
               {/* Password Input */}
@@ -248,11 +261,12 @@ const LoginPage = () => {
                   <input
                     type={showPassword ? 'text' : 'password'}
                     id="password"
-                    placeholder="••••••••••••"
+                    placeholder="At least 8 characters"
                     value={password}
                     onChange={(e) => {
                       setPassword(e.target.value);
-                      handleInputChange();
+                      setFormError(null);
+                      setFieldErrors((prev) => ({ ...prev, password: undefined }));
                     }}
                     required
                     className="w-full pl-10 pr-10 py-3 border border-sage-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-sage-500 focus:border-sage-500 text-sm bg-cream-100/20 text-forest-950 placeholder-forest-950/30 transition-all duration-200"
@@ -274,27 +288,71 @@ const LoginPage = () => {
                     )}
                   </button>
                 </div>
+                {fieldErrors.password && <p className="mt-1.5 text-xs font-semibold text-red-600">{fieldErrors.password}</p>}
               </div>
 
-              <ErrorMessage message={error} />
+              {/* Confirm Password Input */}
+              <div className="flex flex-col">
+                <label htmlFor="confirmPassword" className="mb-1.5 font-serif text-sm font-bold tracking-tight block leading-tight text-forest-700">
+                  Confirm Password
+                </label>
+                <div className="relative">
+                  <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-sage-500">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                  </span>
+                  <input
+                    type={showConfirmPassword ? 'text' : 'password'}
+                    id="confirmPassword"
+                    placeholder="Re-enter your password"
+                    value={confirmPassword}
+                    onChange={(e) => {
+                      setConfirmPassword(e.target.value);
+                      setFormError(null);
+                      setFieldErrors((prev) => ({ ...prev, confirmPassword: undefined }));
+                    }}
+                    required
+                    className="w-full pl-10 pr-10 py-3 border border-sage-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-sage-500 focus:border-sage-500 text-sm bg-cream-100/20 text-forest-950 placeholder-forest-950/30 transition-all duration-200"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                    className="absolute inset-y-0 right-0 flex items-center pr-3 text-sage-500 hover:text-forest-700 focus:outline-none"
+                  >
+                    {showConfirmPassword ? (
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
+                      </svg>
+                    ) : (
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                      </svg>
+                    )}
+                  </button>
+                </div>
+                {fieldErrors.confirmPassword && <p className="mt-1.5 text-xs font-semibold text-red-600">{fieldErrors.confirmPassword}</p>}
+              </div>
+
+              <ErrorMessage message={formError} />
 
               <Button
-                type="submit"
+                type="button"
+                onClick={handleClaim}
                 disabled={loading}
                 className="w-full !bg-sage-500 hover:!bg-forest-700 text-white font-serif text-lg font-bold tracking-tight block leading-tight py-3 px-6 rounded-xl shadow-md hover:shadow-lg transition-all duration-150 ease-in-out hover:-translate-y-0.5 active:scale-[0.98] active:duration-100 border-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-sage-500/50 focus-visible:ring-offset-2"
               >
-                {loading ? 'Signing in...' : 'Log In'}
+                {loading ? 'Creating account...' : 'Claim Account'}
               </Button>
-            </form>
 
-            {/* Staff accounts are provisioned manually by IT and never see a signup
-                path — this link only leads to the student self-registration flow. */}
-            <p className="text-center text-xs text-forest-700/60 mt-5">
-              First time here?{' '}
-              <Link to="/register" className="font-bold text-sage-500 hover:text-forest-700 transition-colors">
-                Claim your student account &rarr;
-              </Link>
-            </p>
+              <p className="text-center text-xs text-forest-700/60 pt-1">
+                Already claimed your account?{' '}
+                <Link to="/login" className="font-bold text-sage-500 hover:text-forest-700 transition-colors">
+                  Log in
+                </Link>
+              </p>
+            </div>
           </div>
         </div>
 
@@ -303,4 +361,4 @@ const LoginPage = () => {
   );
 };
 
-export default LoginPage;
+export default RegisterPage;

@@ -44,30 +44,31 @@ export const AuthProvider = ({ children }) => {
       try {
         if (firebaseUser) {
           setUser(firebaseUser);
+          // Staff (registrars/admins) are provisioned manually via users/{uid}.
           const userRole = await getUserRole(firebaseUser.uid);
           if (userRole) {
             setRole(userRole);
-            if (userRole === 'student') {
-              const studentProfile = await studentService.getProfile(firebaseUser.uid);
-              if (!studentProfile) {
-                await studentService.createStudentProfile(firebaseUser.uid, {
-                  name: firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'Student',
-                  email: firebaseUser.email || '',
-                  studentId: firebaseUser.uid,
-                  course: 'BSIT',
-                  year: '1',
-                  status: 'active'
-                });
-              }
-              setProfile(await studentService.getProfile(firebaseUser.uid));
-            }
             setAuthError(null);
           } else {
-            await firebaseSignOut();
-            setUser(null);
-            setRole(null);
-            setProfile(null);
-            setAuthError('Account not recognized. Contact your administrator.');
+            // Not a staff account — check whether this uid has claimed a
+            // registrar-admitted record. Self-registered students are keyed by
+            // SR-Code (students/{srCode}), with `uid` as a field rather than the
+            // doc id, so this is a query, not a doc-id lookup. There is no
+            // auto-create fallback here: under firestore.rules, only a registrar
+            // may create a students/* doc, and a legitimate student's doc must
+            // already exist (written at admit time) before it can be claimed.
+            const studentProfile = await studentService.getProfileByUid(firebaseUser.uid);
+            if (studentProfile) {
+              setRole('student');
+              setProfile(studentProfile);
+              setAuthError(null);
+            } else {
+              await firebaseSignOut();
+              setUser(null);
+              setRole(null);
+              setProfile(null);
+              setAuthError('Account not recognized. Contact your administrator.');
+            }
           }
         } else {
           setUser(null);

@@ -9,14 +9,78 @@ service cloud.firestore {
       return isSignedIn() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
     }
 
+    // Registrar check for the student self-registration ("claim account") flow.
+    // Per spec this is driven by a manually-created staff/{uid} doc with
+    // role == 'registrar' (exists()+get() below). It also accepts the app's
+    // existing users/{uid}.role == 'admin' accounts as registrars, since in
+    // this codebase the admin role already IS the registrar/IT-staff role that
+    // runs the "Admit New Student" form — this avoids requiring every existing
+    // admin to additionally get a manually-created staff/{uid} doc just to keep
+    // admitting students. New registrar-only accounts can instead be provisioned
+    // purely via staff/{uid} without touching users/{uid} at all.
+    function isRegistrar() {
+      return isSignedIn() && (
+        isAdmin() ||
+        (
+          exists(/databases/$(database)/documents/staff/$(request.auth.uid)) &&
+          get(/databases/$(database)/documents/staff/$(request.auth.uid)).data.role == 'registrar'
+        )
+      );
+    }
+
     match /users/{uid} {
       allow read: if isSignedIn() && request.auth.uid == uid;
       allow write: if isAdmin();
     }
 
-    match /students/{studentId} {
-      allow read: if isSignedIn();
-      allow write: if isAdmin() || request.auth.uid == studentId;
+    // staff/{uid}: registrar-role marker docs, created manually in the console.
+    // Readable only by the account it describes; never client-writable — if this
+    // ever needs to change, that's an IT/console action, not an app write path.
+    match /staff/{uid} {
+      allow read: if isSignedIn() && request.auth.uid == uid;
+      allow write: if false;
+    }
+
+    // students/{srCode}: doc id is the SR-Code (e.g. "23-08214"), not the
+    // Firebase uid. Registrars create these at admit time with uid: null,
+    // claimed: false; a student later "claims" the record by signing up with
+    // {srCode}@g.tlsu.edu.ph and writing their own uid into it (see
+    // src/services/registrationService.js).
+    match /students/{srCode} {
+      // Registrars can read every record; a student can only read their own,
+      // once claimed (resource.data.uid is null until then, so this can never
+      // match an unclaimed record).
+      allow read: if isRegistrar() || (isSignedIn() && resource.data.uid == request.auth.uid);
+
+      // Only a registrar admits (creates) or removes a student record.
+      allow create, delete: if isRegistrar();
+
+      // Update is either a registrar edit, or a self-claim that can ONLY ever
+      // flip an unclaimed record to claimed for the caller's own uid — it can't
+      // touch any other field, re-claim an already-claimed record, or be used
+      // by anyone whose Auth email doesn't match the record (which, since email
+      // is derived from srCode and never hand-typed, means the caller signed up
+      // with exactly {srCode}@g.tlsu.edu.ph).
+      allow update: if isRegistrar() || (
+        resource.data.claimed == false &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['uid', 'claimed']) &&
+        request.resource.data.uid == request.auth.uid &&
+        request.resource.data.claimed == true &&
+        resource.data.email == request.auth.token.email
+        // SECURITY LIMITATION: this proves the caller's Auth email matches the
+        // record, i.e. that createUserWithEmailAndPassword succeeded for
+        // {srCode}@g.tlsu.edu.ph — NOT that the caller owns that inbox, because
+        // there is no email verification step (see REQUIRE_EMAIL_VERIFICATION in
+        // src/utils/studentAuth.js). Anyone who knows an unclaimed SR-Code can
+        // claim it and read that student's records. This is a deliberate,
+        // documented trade-off for the Spark-plan / no-backend demo.
+        //
+        // To close this hole once email verification is wired up client-side
+        // (REQUIRE_EMAIL_VERIFICATION = true + sendEmailVerification call),
+        // uncomment the line below so an unverified email can never complete a
+        // claim even if it matches the derived address:
+        // && request.auth.token.email_verified == true
+      );
     }
 
     match /subjects/{subjectId} {
