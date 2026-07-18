@@ -1,8 +1,10 @@
 import { useMemo } from 'react';
-import { Download, Award, FileText } from 'lucide-react';
+import { Download, Award, FileText, FileSpreadsheet } from 'lucide-react';
 import { useStudent, useStudentSubjects } from '../../../context/StudentDataContext';
 import { getSubjectRemarks, REMARKS } from '../../../utils/studentGrading';
 import { formatSubjectTerm, groupSubjectsByTerm } from '../../../utils/studentMetrics';
+import { generateEvaluationPdf } from '../../../utils/generateReportPdf';
+import universitySeal from '../../../assets/logo/logo.png';
 import LoadingState from '../../../components/LoadingState';
 
 const REMARKS_STYLES = {
@@ -17,7 +19,7 @@ const csvEscape = (value) => {
   return /[",\n]/.test(str) ? `"${str.replace(/"/g, '""')}"` : str;
 };
 
-function downloadTranscriptCsv(displayName, student, subjects, metrics) {
+function downloadCsv(displayName, student, subjects, metrics) {
   const rows = [
     ['Student Name', displayName],
     ['Student Number', student?.id || student?.studentId || ''],
@@ -26,15 +28,16 @@ function downloadTranscriptCsv(displayName, student, subjects, metrics) {
     ['General Weighted Average', metrics.gwa],
     ['Total Credits Earned', metrics.earnedCredits],
     [],
-    ['Term', 'Subject Code', 'Subject Name', 'Units', 'Grade', 'Remarks']
+    ['Date', 'Subject Code', 'Subject Name', 'Term', 'Units', 'Grade', 'Remarks']
   ];
 
   groupSubjectsByTerm(subjects).forEach((group) => {
     group.subjects.forEach((subject) => {
       rows.push([
-        formatSubjectTerm(subject),
+        subject.dateAssigned || subject.createdAt || new Date().toLocaleDateString(),
         subject.subjectCode || '',
         subject.subjectTitle || '',
+        formatSubjectTerm(subject),
         subject.units ?? '',
         subject.grade || '',
         getSubjectRemarks(subject.grade)
@@ -47,11 +50,29 @@ function downloadTranscriptCsv(displayName, student, subjects, metrics) {
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = url;
-  link.download = `transcript_${student?.id || student?.studentId || 'student'}.csv`;
+  link.download = `evaluation_${student?.id || student?.studentId || 'student'}.csv`;
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
   URL.revokeObjectURL(url);
+}
+
+function downloadPdf(displayName, student, subjects, metrics) {
+  const groupedSubjects = groupSubjectsByTerm(subjects);
+  generateEvaluationPdf({
+    studentName: displayName,
+    studentNumber: student?.id || student?.studentId || '—',
+    program: student?.course || '—',
+    yearSection: `${student?.yearLevel || '—'}${student?.section ? ` - ${student.section}` : ''}`,
+    academicYear: student?.academicYear || '—',
+    semester: student?.semester || '—',
+    gwa: metrics.gwa,
+    dateIssued: new Date().toLocaleDateString(),
+    groupedSubjects,
+    getRemarks: getSubjectRemarks,
+    sealImageSrc: universitySeal,
+    filename: `evaluation_report_${student?.id || student?.studentId || 'student'}.pdf`
+  });
 }
 
 export default function StudentEvaluationResultsPage() {
@@ -77,7 +98,7 @@ export default function StudentEvaluationResultsPage() {
   return (
     <div className="space-y-6 text-[#7D1924]">
 
-      {/* Page Title & Download Transcript Action Header Row */}
+      {/* Page Title & Export Action Header Row */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h2 className="text-3xl font-serif font-black tracking-tight text-slate-900">Evaluation Results</h2>
@@ -85,13 +106,22 @@ export default function StudentEvaluationResultsPage() {
             Track your academic performance across all evaluated terms.
           </p>
         </div>
-        <button
-          onClick={() => downloadTranscriptCsv(displayName, student, subjects, metrics)}
-          disabled={subjects.length === 0}
-          className="flex items-center gap-2 bg-white border border-slate-200 text-slate-700 text-xs font-bold px-4 py-2.5 rounded-xl hover:bg-slate-50 transition-all shadow-2xs active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed"
-        >
-          <Download size={14} /> Download Transcript
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => downloadCsv(displayName, student, subjects, metrics)}
+            disabled={subjects.length === 0}
+            className="flex items-center gap-2 bg-white border border-slate-200 text-slate-700 text-xs font-bold px-4 py-2.5 rounded-xl hover:bg-slate-50 transition-all shadow-2xs active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            <FileSpreadsheet size={14} /> Export CSV
+          </button>
+          <button
+            onClick={() => downloadPdf(displayName, student, subjects, metrics)}
+            disabled={subjects.length === 0}
+            className="flex items-center gap-2 bg-[#7D1924] text-[#FCEEEF] text-xs font-black uppercase tracking-wider px-5 py-2.5 rounded-xl hover:bg-[#63121b] transition-all shadow-sm active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            <Download size={14} /> Export PDF
+          </button>
+        </div>
       </div>
 
       {/* Row 1: Summary Metric Dashboard Cards */}

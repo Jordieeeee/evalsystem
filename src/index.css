@@ -45,9 +45,12 @@
 }
 
 @media print {
+  /* Hide everything by default */
   body * {
     visibility: hidden;
   }
+
+  /* Existing printable-area support */
   .printable-area,
   .printable-area * {
     visibility: visible;
@@ -66,4 +69,85 @@
     width: 100%;
     table-layout: fixed;
   }
+
+  /* Professional report printable support */
+  .printable-report,
+  .printable-report * {
+    visibility: visible !important;
+  }
+  .printable-report {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    background: white !important;
+    padding: 0 !important;
+    border: none !important;
+    box-shadow: none !important;
+    border-radius: 0 !important;
+  }
+
+  /* Hide non-printable elements */
+  .print-hidden,
+  .print\\:hidden {
+    display: none !important;
+  }
+
+  /* Professional table styling for print */
+  .printable-report table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+  }
+  .printable-report th,
+  .printable-report td {
+    border: 0.5pt solid #cbd5e1 !important;
+    padding: 6px 8px !important;
+  }
+  .printable-report thead th {
+    background-color: #f8fafc !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  /* Force background colors to print */
+  .printable-report .bg-force-print {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  /* Page margin for professional look */
+  @page {
+    margin: 15mm 12mm;
+    size: A4;
+  }
+}
+
+/* Logout modal animation keyframes */
+@keyframes modal-overlay-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes modal-overlay-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+@keyframes modal-card-in {
+  from { opacity: 0; transform: scale(0.95) translateY(8px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+@keyframes modal-card-out {
+  from { opacity: 1; transform: scale(1) translateY(0); }
+  to { opacity: 0; transform: scale(0.95) translateY(8px); }
+}
+.modal-overlay-enter {
+  animation: modal-overlay-in 0.2s ease-out forwards;
+}
+.modal-overlay-exit {
+  animation: modal-overlay-out 0.15s ease-in forwards;
+}
+.modal-card-enter {
+  animation: modal-card-in 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+.modal-card-exit {
+  animation: modal-card-out 0.15s ease-in forwards;
 }

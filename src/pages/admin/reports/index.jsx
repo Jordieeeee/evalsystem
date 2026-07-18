@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { 
   Printer, FileSpreadsheet, Scroll, 
   CheckCircle2, Calendar, ClipboardCheck, GraduationCap, ShieldAlert,
@@ -8,10 +8,12 @@ import LoadingState from '../../../components/LoadingState';
 import { studentService } from '../../../services/studentService';
 import { evaluationService } from '../../../services/evaluationService';
 import { subjectService } from '../../../services/subjectService';
+import universitySeal from '../../../assets/logo/logo.png';
 
 export default function AdminReportsPage() {
   const [loading, setLoading] = useState(true);
   const [activeReport, setActiveReport] = useState('student');
+  const [evaluationFilter, setEvaluationFilter] = useState('ALL');
   
   // Core Data Registries
   const [students, setStudents] = useState([]);
@@ -30,19 +32,7 @@ export default function AdminReportsPage() {
     totalReturning: 0
   });
 
-  useEffect(() => {
-    const style = document.createElement('style');
-    style.textContent = `
-      @media print {
-        body * { visibility: hidden; }
-        .printable-report, .printable-report * { visibility: visible; }
-        .printable-report { position: absolute; left: 0; top: 0; width: 100%; background: white; padding: 0 !important; border: none !important; }
-        .print-hidden { display: none !important; }
-      }
-    `;
-    document.head.appendChild(style);
-    return () => document.head.removeChild(style);
-  }, []);
+  // Global styles in index.css are used for print layout. No local stylesheet injection needed.
 
   useEffect(() => {
     const fetchAllReportData = async () => {
@@ -98,6 +88,11 @@ export default function AdminReportsPage() {
     };
     fetchAllReportData();
   }, []);
+
+  const filteredEvaluations = useMemo(() => {
+    if (evaluationFilter === 'ALL') return evaluations;
+    return evaluations.filter((e) => e.evaluationType === evaluationFilter);
+  }, [evaluations, evaluationFilter]);
 
   const triggerPrint = () => window.print();
 
@@ -206,6 +201,32 @@ export default function AdminReportsPage() {
         {/* PRIMARY SHEET WRAPPER OUTPUT AREA */}
         <div className="lg:col-span-3 printable-report bg-white rounded-3xl border border-slate-200/60 shadow-xs overflow-hidden p-6 sm:p-8 min-h-[540px] flex flex-col justify-between">
           
+          {/* Print-Only Professional Document Header */}
+          <div className="hidden print:flex flex-row justify-between items-start gap-6 border-b-2 border-slate-900 pb-6 mb-6">
+            <div className="space-y-4">
+              <div className="space-y-0.5 text-left">
+                <h3 className="text-2xl font-serif font-black text-slate-900 tracking-tight">The Last Salle</h3>
+                <p className="text-xs font-bold text-slate-400 uppercase tracking-widest text-left">University</p>
+              </div>
+              <div className="text-xs text-slate-500 space-y-1 font-medium text-left">
+                <p className="font-bold text-slate-700">Office of the University Registrar</p>
+                <p>Institutional Performance Audit Report</p>
+                <p>Date Issued: {new Date().toLocaleDateString()}</p>
+              </div>
+            </div>
+            <div className="w-20 h-20 rounded-full border border-slate-200 p-1 flex items-center justify-center bg-slate-50 shrink-0 shadow-2xs">
+              <img
+                src={universitySeal}
+                alt="University Seal"
+                className="w-full h-full object-contain"
+                onError={(e) => {
+                  e.target.style.display = 'none';
+                  e.target.parentNode.innerHTML = `<div class="text-center font-serif font-black text-[11px] text-[#7D1924]">TLSU</div>`;
+                }}
+              />
+            </div>
+          </div>
+          
           <div className="space-y-6">
             {/* Dynamic Core Report View Render Routing */}
             {activeReport === 'student' && (
@@ -283,9 +304,24 @@ export default function AdminReportsPage() {
 
             {activeReport === 'evaluation' && (
               <div className="space-y-5">
-                <div className="border-b border-slate-100 pb-4">
-                  <h3 className="text-lg font-black text-slate-900 tracking-tight uppercase">Evaluation Track Operations Logs</h3>
-                  <p className="text-slate-400 text-xs font-medium mt-0.5">Historical verification pipelines processed safely by the curriculum engine parameters.</p>
+                <div className="border-b border-slate-100 pb-4 flex flex-col md:flex-row justify-between items-start md:items-center gap-3">
+                  <div>
+                    <h3 className="text-lg font-black text-slate-900 tracking-tight uppercase">Evaluation Track Operations Logs</h3>
+                    <p className="text-slate-400 text-xs font-medium mt-0.5">Historical verification pipelines processed safely by the curriculum engine parameters.</p>
+                  </div>
+                  <select
+                    value={evaluationFilter}
+                    onChange={(e) => setEvaluationFilter(e.target.value)}
+                    className="bg-[#f8faf7] border border-slate-200 text-[11px] font-black uppercase tracking-wider px-3 py-2 rounded-xl focus:outline-none focus:ring-1 focus:ring-[#7D1924]/30 text-slate-700 min-w-[200px] print-hidden"
+                  >
+                    <option value="ALL">All Operations Tracks</option>
+                    <option value="REGULAR">Regular Evaluation</option>
+                    <option value="GRADUATION">Graduation Evaluation</option>
+                    <option value="TRANSFEREE">Transferee Evaluation</option>
+                    <option value="SHIFTEE">Shiftee Evaluation</option>
+                    <option value="CURR_SHIFT">Curriculum Shift Evaluation</option>
+                    <option value="RETURNING">Returning Student Evaluation</option>
+                  </select>
                 </div>
                 <div className="overflow-x-auto">
                   <table className="w-full text-left text-xs border-collapse">
@@ -299,7 +335,7 @@ export default function AdminReportsPage() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 font-semibold text-slate-600">
-                      {evaluations.map((e, index) => (
+                      {filteredEvaluations.map((e, index) => (
                         <tr key={index} className="hover:bg-slate-50/30 transition-colors">
                           <td className="p-3 pl-4 text-slate-400 font-mono font-medium">{e.evaluationDate ? new Date(e.evaluationDate).toLocaleDateString() : 'N/A'}</td>
                           <td className="p-3 font-black text-slate-900">{e.studentId}</td>
