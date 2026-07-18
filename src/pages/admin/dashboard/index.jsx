@@ -9,8 +9,10 @@ import { evaluationService } from '../../../services/evaluationService';
 import { systemService } from '../../../services/systemService';
 import { Link } from 'react-router-dom';
 import LoadingState from '../../../components/LoadingState';
+import { useSystemSettings } from '../../../hooks/useSystemSettings';
 
 export default function AdminDashboardPage() {
+  const { showActivityFeed } = useSystemSettings();
   const [loading, setLoading] = useState(true);
   
   const [stats, setStats] = useState({
@@ -242,7 +244,7 @@ export default function AdminDashboardPage() {
         <div className="bg-white rounded-3xl p-6 border border-slate-200/80 shadow-sm space-y-4">
           <h3 className="text-xs font-black text-slate-900 uppercase tracking-wider">Quick Actions</h3>
           <div className="grid grid-cols-2 gap-3 text-center h-full">
-            <Link to="/admin/evaluation" className="p-4 bg-slate-50 hover:bg-[#FCEEEF]/30 hover:border-[#7A1C2C]/40 border border-slate-200/60 rounded-2xl flex flex-col items-center justify-center gap-2 group transition-all">
+            <Link to="/admin/students" className="p-4 bg-slate-50 hover:bg-[#FCEEEF]/30 hover:border-[#7A1C2C]/40 border border-slate-200/60 rounded-2xl flex flex-col items-center justify-center gap-2 group transition-all">
               <PlusCircle size={20} className="text-[#375534] group-hover:scale-105 transition-transform" />
               <span className="text-[10px] font-black text-slate-700 tracking-wide uppercase">Assign Subject</span>
             </Link>
@@ -306,22 +308,24 @@ export default function AdminDashboardPage() {
           </div>
         </div>
 
-        <div className="bg-white rounded-3xl p-6 border border-slate-200/80 shadow-sm flex flex-col justify-between space-y-4">
-          <div className="flex justify-between items-center">
-            <h3 className="text-xs font-black text-slate-900 uppercase tracking-wider">Activity Feed</h3>
-          </div>
-          
-          <div className="space-y-3 max-h-[170px] overflow-y-auto pr-1 text-[11px] leading-relaxed">
-            {activityFeed.map((log) => (
-              <div key={log.id} className="flex gap-3 items-start border-l-2 border-[#375534]/30 pl-3 py-0.5">
-                <div>
-                  <p className="text-slate-800 font-bold">{log.text}</p>
-                  <p className="text-slate-400 font-semibold font-mono mt-0.5 text-[9px]">{log.time}</p>
+        {showActivityFeed && (
+          <div className="bg-white rounded-3xl p-6 border border-slate-200/80 shadow-sm flex flex-col justify-between space-y-4">
+            <div className="flex justify-between items-center">
+              <h3 className="text-xs font-black text-slate-900 uppercase tracking-wider">Activity Feed</h3>
+            </div>
+
+            <div className="space-y-3 max-h-[170px] overflow-y-auto pr-1 text-[11px] leading-relaxed">
+              {activityFeed.map((log) => (
+                <div key={log.id} className="flex gap-3 items-start border-l-2 border-[#375534]/30 pl-3 py-0.5">
+                  <div>
+                    <p className="text-slate-800 font-bold">{log.text}</p>
+                    <p className="text-slate-400 font-semibold font-mono mt-0.5 text-[9px]">{log.time}</p>
+                  </div>
                 </div>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
-        </div>
+        )}
       </div>
     </div>
   );

@@ -458,6 +458,8 @@ return (
                   <button
                     type="button"
                     onClick={() => onDeleteManualSubject(s.id)}
+                    aria-label={`Remove ${s.subjectCode || 'manual entry'}`}
+                    title="Remove entry"
                     className="text-rose-500 hover:text-rose-700 p-1.5 rounded-lg hover:bg-rose-50"
                   >
                     <Trash2 size={14} />

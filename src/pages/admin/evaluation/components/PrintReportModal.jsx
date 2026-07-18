@@ -1,6 +1,7 @@
 import React from 'react';
 import { Printer, Layers } from 'lucide-react';
 import schoolLogo from '../../../../assets/logo/logo.png';
+import ChecksheetPrintSheet from './ChecksheetPrintSheet';
 
 export default function PrintReportModal({
   isReportModalOpen,
@@ -12,6 +13,7 @@ export default function PrintReportModal({
   const data = activeReportData.summary || {};
   const currentTimestamp = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' });
   const isReturningReport = activeReportData.type === 'returning' || activeReportData.type === 'RETURNING';
+  const isCurrShiftReport = activeReportData.type === 'curr-shift';
 
   return (
     <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
@@ -294,6 +296,8 @@ export default function PrintReportModal({
 
                 </div>
               </>
+            ) : isCurrShiftReport ? (
+              <ChecksheetPrintSheet activeReportData={activeReportData} />
             ) : (
               /* ================= TRANSFEREE / DEFAULT REPORT (unchanged) ================= */
               <>

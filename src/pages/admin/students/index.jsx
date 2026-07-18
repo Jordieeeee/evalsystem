@@ -10,6 +10,7 @@ import { db } from '../../../services/firebase';
 import { systemService } from '../../../services/systemService';
 import CopyOfGradesMatrix from '../../../components/CopyOfGradesMatrix';
 import LoadingState from '../../../components/LoadingState';
+import { useSystemSettings } from '../../../hooks/useSystemSettings';
 import {
   collection, doc, setDoc, updateDoc, addDoc, deleteDoc, query, where, onSnapshot, getDoc
 } from 'firebase/firestore';
@@ -20,6 +21,7 @@ import {
 } from '../../../services/curriculumConfig';
 
 const ADMISSION_TYPES = ['Freshman', 'Transferee', 'Shiftee', 'Returnee'];
+const CLASSIFICATIONS = ['regular', 'irregular'];
 const COURSE_LIST = ['BSIT', 'BSCS', 'BSEMC', 'BSIS'];
 const SECTION_LIST = ['A', 'B', 'C', 'D'];
 const YEAR_LEVELS =['First Year', 'Second Year', 'Third Year', 'Fourth Year'];
@@ -38,6 +40,9 @@ const STUDENT_STATUSES = [
 ];
 
 export default function StudentManagement() {
+  const { compactTable } = useSystemSettings();
+  const cellPad = compactTable ? 'px-4 py-2' : 'px-6 py-4';
+
   // --- APPLICATION DATA STATES ---
   const [students, setStudents] = useState([]);
   const [studentSubjects, setStudentSubjects] = useState([]);
@@ -764,29 +769,29 @@ export default function StudentManagement() {
               <table className="w-full text-left border-collapse">
                 <thead>
                   <tr className="bg-slate-50 border-b text-slate-400 text-xs font-bold uppercase tracking-wider">
-                    <th className="px-6 py-4">Student Info</th>
-                    <th className="px-6 py-4">SR-Code</th>
-                    <th className="px-6 py-4">Current Placement</th>
-                    <th className="px-6 py-4">Track Matrix</th>
-                    <th className="px-6 py-4">Curriculum Plan</th>
-                    <th className="px-6 py-4">Status</th>
-                    <th className="px-6 py-4 text-right">Actions</th>
+                    <th className={cellPad}>Student Info</th>
+                    <th className={cellPad}>SR-Code</th>
+                    <th className={cellPad}>Current Placement</th>
+                    <th className={cellPad}>Track Matrix</th>
+                    <th className={cellPad}>Curriculum Plan</th>
+                    <th className={cellPad}>Status</th>
+                    <th className={`${cellPad} text-right`}>Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 text-sm font-medium">
                   {directoryFilteredList.map((student) => (
                     <tr key={student.id} onClick={() => { setSelectedStudent(student); setView('student-details'); setActiveTab('Summary'); }} className="hover:bg-slate-50/50 cursor-pointer transition">
-                      <td className="px-6 py-4 font-bold text-slate-900">{student.lastName}, {student.firstName}</td>
-                      <td className="px-6 py-4 font-bold text-blue-600">{student.studentId}</td>
-                      <td className="px-6 py-4 text-slate-500">AY {student.academicYear || 'N/A'}   {student.semester || '1st Semester'}   {student.yearLevel}</td>
-                      <td className="px-6 py-4 text-slate-400 text-xs">{student.track || 'Unassigned'}</td>
-                      <td className="px-6 py-4"><span className="text-[10px] font-extrabold px-2 py-0.5 rounded bg-slate-100 text-slate-600">{student.course}   {student.curriculum === 'NEW' ? 'New' : 'Old'} Curriculum</span></td>
-                      <td className="px-6 py-4">
+                      <td className={`${cellPad} font-bold text-slate-900`}>{student.lastName}, {student.firstName}</td>
+                      <td className={`${cellPad} font-bold text-blue-600`}>{student.studentId}</td>
+                      <td className={`${cellPad} text-slate-500`}>AY {student.academicYear || 'N/A'}   {student.semester || '1st Semester'}   {student.yearLevel}</td>
+                      <td className={`${cellPad} text-slate-400 text-xs`}>{student.track || 'Unassigned'}</td>
+                      <td className={cellPad}><span className="text-[10px] font-extrabold px-2 py-0.5 rounded bg-slate-100 text-slate-600">{student.course}   {student.curriculum === 'NEW' ? 'New' : 'Old'} Curriculum</span></td>
+                      <td className={cellPad}>
                         <span className="text-[10px] font-bold px-2.5 py-1 rounded-full uppercase tracking-wider bg-emerald-50 text-emerald-700">
                           {student.status || 'Active'}
                         </span>
                       </td>
-                      <td className="px-6 py-4 text-right"><ChevronRight size={18} className="text-slate-300" /></td>
+                      <td className={`${cellPad} text-right`}><ChevronRight size={18} className="text-slate-300" /></td>
                     </tr>
                   ))}
                 </tbody>
@@ -1299,7 +1304,7 @@ export default function StudentManagement() {
                 </div>
                 <div><label className="block text-xs font-bold text-slate-55 uppercase mb-1">Classification</label>
                   <select value={editStudentForm.classification} onChange={e => setEditStudentForm({ ...editStudentForm, classification: e.target.value })} className="w-full bg-white border rounded-xl p-2.5 text-sm cursor-pointer">
-                    {CLASSIFICATIONS.map(c => <option key={c} value={c}>{c}</option>)}
+                    {CLASSIFICATIONS.map(c => <option key={c} value={c} className="capitalize">{c.charAt(0).toUpperCase() + c.slice(1)}</option>)}
                   </select>
                 </div>
               </div>

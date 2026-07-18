@@ -25,7 +25,36 @@ export default function AdminSettingsPage() {
     compactTable: true,
     showActivityFeed: true
   });
+  const [isLoadingGeneral, setIsLoadingGeneral] = useState(true);
+  const [isSavingGeneral, setIsSavingGeneral] = useState(false);
   const [saveSuccessGeneral, setSaveSuccessGeneral] = useState(false);
+
+  // Fetch the live general/display settings from Firebase on mount
+  useEffect(() => {
+    let isMounted = true;
+    const fetchGeneralSettings = async () => {
+      try {
+        const settings = await systemService.getGeneralSettings();
+        if (isMounted && settings) {
+          setGeneralInfo({
+            universityName: settings.universityName,
+            shortName: settings.shortName,
+            contactEmail: settings.contactEmail
+          });
+          setDisplaySettings({
+            compactTable: settings.compactTable,
+            showActivityFeed: settings.showActivityFeed
+          });
+        }
+      } catch (error) {
+        console.error("Failed to load general settings", error);
+      } finally {
+        if (isMounted) setIsLoadingGeneral(false);
+      }
+    };
+    fetchGeneralSettings();
+    return () => { isMounted = false; };
+  }, []);
 
   // --- ACADEMIC CONFIG STATES ---
   const [academicConfig, setAcademicConfig] = useState({
@@ -64,14 +93,32 @@ export default function AdminSettingsPage() {
     setGeneralInfo(prev => ({ ...prev, [name]: value }));
   };
 
-  const handleToggle = (key) => {
-    setDisplaySettings(prev => ({ ...prev, [key]: !prev[key] }));
+  const handleToggle = async (key) => {
+    const nextValue = !displaySettings[key];
+    setDisplaySettings(prev => ({ ...prev, [key]: nextValue }));
+    try {
+      await systemService.updateGeneralSettings({ [key]: nextValue });
+    } catch (error) {
+      console.error("Failed to save display setting:", error);
+      setDisplaySettings(prev => ({ ...prev, [key]: !nextValue }));
+      alert("Failed to save display setting. Check the browser console.");
+    }
   };
 
-  const handleSaveGeneral = (e) => {
+  const handleSaveGeneral = async (e) => {
     e.preventDefault();
-    setSaveSuccessGeneral(true);
-    setTimeout(() => setSaveSuccessGeneral(false), 3000);
+    setIsSavingGeneral(true);
+    setSaveSuccessGeneral(false);
+    try {
+      await systemService.updateGeneralSettings(generalInfo);
+      setSaveSuccessGeneral(true);
+      setTimeout(() => setSaveSuccessGeneral(false), 3000);
+    } catch (error) {
+      console.error("Failed to update general settings:", error);
+      alert("Failed to save! Check the browser console. You may need to update your Firestore security rules to allow writes to the 'system_settings' collection.");
+    } finally {
+      setIsSavingGeneral(false);
+    }
   };
 
   // The fixed Academic Config Save Function
@@ -140,6 +187,9 @@ export default function AdminSettingsPage() {
                   <h3 className="text-base font-black text-slate-900 tracking-tight">General Information</h3>
                 </div>
 
+                {isLoadingGeneral ? (
+                  <LoadingState label="Loading general settings..." className="py-8" />
+                ) : (
                 <form onSubmit={handleSaveGeneral} className="space-y-4 text-xs font-bold text-slate-500 uppercase tracking-wider">
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                     <div className="sm:col-span-2 space-y-2">
@@ -183,14 +233,16 @@ export default function AdminSettingsPage() {
                         </div>
                       )}
                     </div>
-                    <button 
+                    <button
                       type="submit"
-                      className="flex items-center gap-2 bg-[#7D1924] text-[#FCEEEF] text-xs font-black uppercase tracking-widest px-6 py-3.5 rounded-2xl hover:bg-[#962230] transition-all shadow-sm active:scale-[0.98]"
+                      disabled={isSavingGeneral}
+                      className="flex items-center gap-2 bg-[#7D1924] text-[#FCEEEF] text-xs font-black uppercase tracking-widest px-6 py-3.5 rounded-2xl hover:bg-[#962230] transition-all shadow-sm active:scale-[0.98] disabled:opacity-50"
                     >
-                      <Save size={14} /> Save Changes
+                      {isSavingGeneral ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />} Save Changes
                     </button>
                   </div>
                 </form>
+                )}
               </div>
 
               <div className="bg-white rounded-3xl border border-slate-200/80 p-6 shadow-sm space-y-6">

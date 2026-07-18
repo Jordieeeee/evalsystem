@@ -1,7 +1,5 @@
 import { AlertTriangle, CheckCircle2, CircleDashed, ArrowRight, GitBranch, Ban } from 'lucide-react';
 
-// Same status palette CurriculumShiftView uses, so a Credited/Bridge/Gap row
-// reads identically wherever bridging results appear.
 const ROW_TINT = {
   Credited: 'bg-emerald-50/40',
   Bridge: 'bg-amber-50/40',

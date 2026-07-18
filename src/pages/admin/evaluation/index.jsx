@@ -327,7 +327,7 @@ export default function AdminEvaluationPage() {
       studentProfileUpdates.program = newShifteeProgram;
     }
     if (Object.keys(studentProfileUpdates).length > 0) {
-      await studentService.updateStudent(selectedStudentId, studentProfileUpdates);
+      await studentService.updateStudentProfile(selectedStudentId, studentProfileUpdates);
     }
     if (evaluationStrategy === 'transferee' && auditOutput.creditedList?.length > 0) {
       const batchPromises = auditOutput.creditedList.map(subject => {
@@ -364,17 +364,22 @@ const strategyLabel = (strategy) => {
 };
 
 const handleTriggerReportModalOpen = (typeLabel) => {
-  if (!selectedStudentData || !auditOutput) return alert('Select target profile node context entry first.');
+  // The curr-shift track has its own independently-computed summary
+  // (bridgingOutput) -- auditOutput for that track is the unrelated regular-
+  // evaluation pipeline result and would print the wrong data entirely.
+  const reportSummary = typeLabel === 'curr-shift' ? bridgingOutput : auditOutput;
+  if (!selectedStudentData || !reportSummary) return alert('Select target profile node context entry first.');
   setActiveReportData({
     type: typeLabel,
     studentId: selectedStudentId,
     srCode: selectedStudentData.srCode || selectedStudentId,
     name: `${selectedStudentData.lastName}, ${selectedStudentData.firstName}`,
+    student: selectedStudentData,
     curriculum: activeStudentCurriculum === 'New Curriculum' ? 'NEW' : 'OLD',
-    eligibility: auditOutput.overallEligibility,
+    eligibility: reportSummary.overallEligibility,
     evaluatedBy: user?.email || 'Office of the University Registrar',
     timestamp: new Date().toLocaleString(),
-    summary: auditOutput,
+    summary: reportSummary,
     prevSchool: evaluationStrategy === 'shiftee' ? 'Batangas State University' : prevSchoolName,
     prevProgram: evaluationStrategy === 'shiftee' ? selectedStudentData.program || 'BSIT (Software Engineering)' : prevProgram,
     newProgram: evaluationStrategy === 'shiftee' ? newShifteeProgram : null
@@ -694,7 +699,18 @@ return (
               emptyMessage="No course records found for this student."
             />
             {evaluationStrategy === 'curr-shift' && bridgingOutput && (
-              <PlanBridgingView auditOutput={bridgingOutput} />
+              <div className="space-y-4">
+                <PlanBridgingView auditOutput={bridgingOutput} />
+                <div className="flex justify-end">
+                  <button
+                    type="button"
+                    onClick={() => handleTriggerReportModalOpen('curr-shift')}
+                    className="border border-slate-200 hover:bg-slate-50 text-slate-800 px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5"
+                  >
+                    <Printer size={13} /> Print Bridging Checksheet
+                  </button>
+                </div>
+              </div>
             )}
             {isTrackUnimplemented && (
               <div className="text-center py-16 text-slate-400 font-semibold text-xs bg-slate-50 rounded-2xl border border-dashed border-slate-200">
