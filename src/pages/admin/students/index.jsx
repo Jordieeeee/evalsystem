@@ -51,8 +51,6 @@ export default function StudentManagement() {
   const [error, setError] = useState(null);
   // --- LIVE FIRESTORE CURRICULUM STATES ---
   const [newSubjectsCatalog, setNewSubjectsCatalog] = useState([]);
-  // First-snapshot tracking per catalog, so the manual-entry modal can tell
-  // "still streaming" apart from "genuinely empty".
   const [catalogsLoaded, setCatalogsLoaded] = useState({ NEW: false, OLD: false });
   const [oldSubjectsCatalog, setOldSubjectsCatalog] = useState([]);
   const [curriculumMappings, setCurriculumMappings] = useState({});
@@ -83,8 +81,6 @@ export default function StudentManagement() {
   const [previewCourseLoad, setPreviewCourseLoad] = useState([]);
   const [maxAllowedPreviewUnits, setMaxAllowedPreviewUnits] = useState(21);
 
-  // --- SECTIONS EXPAND/COLLAPSE IN COPY OF GRADES ---
-
   // Helper to trigger toast notifications
   const showToast = (message, type = 'success') => {
     setToast({ message, type });
@@ -99,8 +95,6 @@ export default function StudentManagement() {
     phoneNumber: '', guardianContact: '', admissionDate: new Date().toISOString().split('T')[0], photoUrl: ''
   });
 
-  // The registrar-configured active A.Y. (system_settings/academic), shown read-only
-  // on the Academic Block. Same fallback the dashboard and Settings page use.
   const [activeAcademicYear, setActiveAcademicYear] = useState('2026-2027');
 
   const [editStudentForm, setEditStudentForm] = useState({
@@ -109,20 +103,13 @@ export default function StudentManagement() {
     phoneNumber: '', guardianContact: '', admissionDate: '', photoUrl: ''
   });
 
-  // Manual Subject Entry Form State
   const [newSubjectRecord, setNewSubjectRecord] = useState({
     subjectCode: '', subjectTitle: '', units: 3, term: '2026-2027', yearLevel: 'First Year', semester: '1st Semester', grade: 'In Progress'
   });
 
-  // The catalog the manual-entry modal reads from, chosen purely by its term.
-  // Both catalogs are already streamed above, so this selects rather than refetches.
   const manualEntryCurriculum = getCurriculumForTerm(newSubjectRecord.term);
   const isManualCatalogLoading = !catalogsLoaded[manualEntryCurriculum];
 
-  // Layered: term picks the collection, then year level + semester narrow it.
-  // Both sides of every comparison go through the shared normalizers, so UI
-  // labels ('Fourth Year' / '1st Semester') match stored variants ('4th Year',
-  // 'First Semester') without relying on string equality.
   const manualEntryCatalog = useMemo(() => {
     const source = manualEntryCurriculum === 'NEW' ? newSubjectsCatalog : oldSubjectsCatalog;
     const targetYear = normalizeYear(newSubjectRecord.yearLevel);
@@ -130,8 +117,6 @@ export default function StudentManagement() {
     return source
       .filter(sub => {
         const subYear = normalizeYear(sub.yearLevel || sub.year);
-        // semesterOffered is an array on most docs but a bare string on some;
-        // handlePopulateSemester already has to cope with both.
         const offered = sub.semesterOffered ?? sub.semester;
         const matchesSem = Array.isArray(offered)
           ? offered.some(s => normalizeSemester(s) === targetSem)
@@ -139,8 +124,6 @@ export default function StudentManagement() {
         return subYear === targetYear && matchesSem;
       })
       .map(sub => ({
-        // Same defensive field fallbacks the rest of this page already applies,
-        // since documents are not uniformly shaped across the two collections.
         code: String(sub.courseCode || sub.code || sub.subjectCode || '').toUpperCase(),
         title: sub.courseTitle || sub.descriptiveTitle || sub.subjectTitle || '',
         units: parseInt(sub.creditUnits || sub.units || 3, 10)
@@ -149,8 +132,6 @@ export default function StudentManagement() {
       .sort((a, b) => a.code.localeCompare(b.code));
   }, [manualEntryCurriculum, newSubjectsCatalog, oldSubjectsCatalog, newSubjectRecord.yearLevel, newSubjectRecord.semester]);
 
-  // Term, year level and semester are the three controlling fields: changing any
-  // of them invalidates a selection made under the previous scope.
   const handleManualScopeChange = (patch) => {
     setNewSubjectRecord(prev => ({ ...prev, ...patch, subjectCode: '', subjectTitle: '', units: 3 }));
   };
@@ -165,13 +146,10 @@ export default function StudentManagement() {
     }));
   };
 
-  // Semester Template Populater State
   const [populateForm, setPopulateForm] = useState({
     yearLevel: 'First Year', semester: '1st Semester', term: '2026-2027'
   });
 
-  // Toggle Section Helper
-  // Side Effect: Auto-reset Track value if Year Level is lower than 3rd Year
   useEffect(() => {
     const numericYear = normalizeYear(newStudent.yearLevel);
     if (numericYear === '1' || numericYear === '2') {
@@ -190,8 +168,6 @@ export default function StudentManagement() {
     }
   }, [editStudentForm.yearLevel]);
 
-  // Pull the live active A.Y. so the locked field tracks the registrar's setting
-  // rather than a value hardcoded per page.
   useEffect(() => {
     let isMounted = true;
     const fetchActiveYear = async () => {
@@ -206,7 +182,6 @@ export default function StudentManagement() {
     return () => { isMounted = false; };
   }, []);
 
-  // Enforces curriculum timeline profiles
   useEffect(() => {
     if (newStudent.admissionType === 'Freshman') {
       setNewStudent(prev => ({
@@ -245,7 +220,6 @@ export default function StudentManagement() {
     }
   }, [editStudentForm.admissionType, editStudentForm.academicYear]);
 
-  // STREAM LIVE STUDENTS FROM FIRESTORE
   useEffect(() => {
     setLoading(true);
     const unsubscribe = onSnapshot(collection(db, 'students'), (snapshot) => {
@@ -260,7 +234,6 @@ export default function StudentManagement() {
     return () => unsubscribe();
   }, []);
 
-  // STREAM LIVE SUBJECT CATALOGS AND MAPPINGS
   useEffect(() => {
     const unsubNew = onSnapshot(collection(db, 'new_subjects'), (snapshot) => {
       const list = [];
@@ -285,7 +258,6 @@ export default function StudentManagement() {
     return () => { unsubNew(); unsubOld(); unsubMappings(); };
   }, []);
 
-  // STREAM STUDENT-SPECIFIC SUBJECT RECORDS
   useEffect(() => {
     if (!selectedStudent || !selectedStudent.studentId) {
       setStudentSubjects([]);
@@ -296,7 +268,6 @@ export default function StudentManagement() {
       const list = [];
       snapshot.forEach((doc) => list.push({ id: doc.id, ...doc.data() }));
 
-      // Auto-load current semester layout if empty
       if (list.length === 0) {
         const catalog = selectedStudent.curriculum === 'NEW' ? newSubjectsCatalog : oldSubjectsCatalog;
 
@@ -343,7 +314,6 @@ export default function StudentManagement() {
     return () => unsubscribe();
   }, [selectedStudent, newSubjectsCatalog, oldSubjectsCatalog]);
 
-  // PRELOAD DYNAMIC PREVIEW IN NEW ENTRY FORM
   useEffect(() => {
     if (view !== 'add-student') return;
 
@@ -382,7 +352,6 @@ export default function StudentManagement() {
     setMaxAllowedPreviewUnits(limitCheck.maxAllowed || 21);
   }, [newStudent.curriculum, newStudent.yearLevel, newStudent.semester, newStudent.academicYear, newStudent.course, newStudent.track, newSubjectsCatalog, oldSubjectsCatalog, view]);
 
-  // Dynamic KPI Metric Engine
   const getCalculatedMetrics = () => {
     const evaluated = studentSubjects.filter(sub => sub && sub.grade && !['Inc', 'Drop', 'W', 'In Progress'].includes(sub.grade));
     const passed = studentSubjects.filter(sub => sub && (sub.status === 'passed' || (parseFloat(sub.grade) >= 1.0 && parseFloat(sub.grade) <= 3.0)));
@@ -403,7 +372,6 @@ export default function StudentManagement() {
   const handleNameStrFilter = (value) => value.replace(/[^a-zA-Z\s]/g, '');
   const handleIdStrFilter = (value) => value.replace(/[^0-9\-]/g, '');
 
-  // Structured Audit Report / Master Plan Generator
   const generateStructuredAuditReport = () => {
     if (!selectedStudent) return [];
 
@@ -431,7 +399,6 @@ export default function StudentManagement() {
         }
       }
 
-      // --- FIX: Normalize both codes for comparison (strips spaces, underscores, dashes, and ignores case) ---
       const cleanCatalogCode = String(course.courseCode || course.code || '').replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
 
       const matchedRecord = studentSubjects.find(s => {
@@ -440,7 +407,6 @@ export default function StudentManagement() {
         return cleanStudentCode === cleanCatalogCode;
       });
 
-      // Consider a course completed if it was matched and is either explicitly marked "passed" or has a passing numerical grade
       const isCompleted = matchedRecord && (
         matchedRecord.status === 'passed' ||
         (parseFloat(matchedRecord.grade) >= 1.0 && parseFloat(matchedRecord.grade) <= 3.0)
@@ -475,7 +441,6 @@ export default function StudentManagement() {
     return structuredStructure;
   };
 
-  // Pre-load semester courses template checklist in one click
   const handlePopulateSemester = async (e) => {
     e.preventDefault();
     if (!selectedStudent) return;
@@ -541,10 +506,6 @@ export default function StudentManagement() {
   const handleAddStudent = async (e) => {
     e.preventDefault();
     if (!newStudent.studentId) return;
-    // Email is never hand-typed — it's always derived from the SR-Code so it
-    // matches exactly what Firebase Auth will issue when the student later
-    // claims their account. firestore.rules checks this equality at claim time,
-    // so a mismatch here would permanently lock the student out of claiming.
     if (!isValidSrCode(newStudent.studentId)) {
       showToast("Registration rejected. SR-Code must match the format YY-NNNNN (e.g. 23-08214).", "error");
       return;
@@ -569,9 +530,6 @@ export default function StudentManagement() {
       await setDoc(doc(db, 'students', newStudent.studentId), {
         ...newStudent,
         email: deriveEmail(newStudent.studentId),
-        // Admit-time state for the self-registration ("claim account") flow: no
-        // Auth uid is linked yet, and the record cannot be claimed a second time
-        // once claimed flips to true. See RegisterPage / registrationService.js.
         uid: null,
         claimed: false,
         createdAt: timestamp,
@@ -707,9 +665,6 @@ export default function StudentManagement() {
     return matchSearch && matchCurr && matchYear && matchStatus && matchAdmin && matchClass && matchTrack;
   });
 
-
-  // `loading` is only true until the first students snapshot lands, so this
-  // gates the initial load without flashing on later stream updates.
   if (loading) {
     return (
       <div className="p-8 bg-[#f8fafc] min-h-screen text-slate-800 font-sans antialiased relative">
@@ -736,7 +691,7 @@ export default function StudentManagement() {
               <h1 className="text-3xl font-extrabold tracking-tight text-slate-900">Students Directory</h1>
               <p className="text-slate-500 text-sm mt-0.5">Automated curriculum tracing and transcript management matrix.</p>
             </div>
-            <button onClick={() => setView('add-student')} className="bg-blue-600 hover:bg-blue-700 text-white font-bold px-5 py-2.5 rounded-xl shadow-md text-sm flex items-center gap-1.5">
+            <button onClick={() => setView('add-student')} className="bg-blue-600 hover:bg-blue-700 text-white font-bold px-5 py-2.5 rounded-xl shadow-md text-sm flex items-center gap-1.5 cursor-pointer">
               <Plus size={16} /> Add New Student
             </button>
           </div>
@@ -751,65 +706,76 @@ export default function StudentManagement() {
                 />
               </div>
               <div className="flex gap-2.5">
-                <select value={filterYear} onChange={(e) => setFilterYear(e.target.value)} className="border rounded-xl px-4 py-2.5 text-sm bg-slate-50 text-slate-600 font-medium focus:outline-none">
+                <select value={filterYear} onChange={(e) => setFilterYear(e.target.value)} className="border rounded-xl px-4 py-2.5 text-sm bg-slate-50 text-slate-600 font-medium focus:outline-none cursor-pointer">
                   <option value="All">All Year Levels</option>
                   <option value="First Year">1st Year</option>
                   <option value="Second Year">2nd Year</option>
                   <option value="Third Year">3rd Year</option>
                   <option value="Fourth Year">4th Year</option>
                 </select>
-                <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className="border rounded-xl px-4 py-2.5 text-sm bg-slate-50 text-slate-600 font-medium focus:outline-none">
+                <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className="border rounded-xl px-4 py-2.5 text-sm bg-slate-50 text-slate-600 font-medium focus:outline-none cursor-pointer">
                   <option value="All">All Statuses</option>
                   {STUDENT_STATUSES.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
                 </select>
-                <button onClick={() => setShowAdvancedFilters(!showAdvancedFilters)} className={`border p-2.5 rounded-xl ${showAdvancedFilters ? 'bg-slate-950 text-white' : 'bg-slate-50 text-slate-600'}`}><SlidersHorizontal size={18} /></button>
+                <button onClick={() => setShowAdvancedFilters(!showAdvancedFilters)} className={`border p-2.5 rounded-xl cursor-pointer ${showAdvancedFilters ? 'bg-slate-950 text-white' : 'bg-slate-50 text-slate-600'}`}><SlidersHorizontal size={18} /></button>
               </div>
             </div>
             {showAdvancedFilters && (
               <div className="pt-4 border-t border-slate-100 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 text-left text-xs font-bold text-slate-400">
                 <div><label className="mb-1 block uppercase">Curriculum Version</label>
-                  <select value={filterCurriculum} onChange={e => setFilterCurriculum(e.target.value)} className="w-full bg-slate-50 border rounded-xl p-2 font-medium text-slate-600 outline-none"><option value="All">All Curriculums</option><option value="NEW">New Curriculum</option><option value="OLD">Old Curriculum</option></select>
+                  <select value={filterCurriculum} onChange={e => setFilterCurriculum(e.target.value)} className="w-full bg-slate-50 border rounded-xl p-2 font-medium text-slate-600 outline-none cursor-pointer"><option value="All">All Curriculums</option><option value="NEW">New Curriculum</option><option value="OLD">Old Curriculum</option></select>
                 </div>
-                <div><label className="mb-1 block uppercase">Admission Type</label>                   <select value={filterAdmission} onChange={e => setFilterAdmission(e.target.value)} className="w-full bg-slate-50 border rounded-xl p-2 font-medium text-slate-600 outline-none"><option value="All">All Admissions</option>{ADMISSION_TYPES.map(a => <option key={a} value={a}>{a}</option>)}</select>
+                <div><label className="mb-1 block uppercase">Admission Type</label>                   <select value={filterAdmission} onChange={e => setFilterAdmission(e.target.value)} className="w-full bg-slate-50 border rounded-xl p-2 font-medium text-slate-600 outline-none cursor-pointer"><option value="All">All Admissions</option>{ADMISSION_TYPES.map(a => <option key={a} value={a}>{a}</option>)}</select>
                 </div>
-                <div><label className="mb-1 block uppercase">Classification</label>                   <select value={filterClassification} onChange={e => setFilterClassification(e.target.value)} className="w-full bg-slate-50 border rounded-xl p-2 font-medium text-slate-600 outline-none"><option value="All">All Classifications</option><option value="regular">Regular</option><option value="irregular">Irregular</option></select>
+                <div><label className="mb-1 block uppercase">Classification</label>                   <select value={filterClassification} onChange={e => setFilterClassification(e.target.value)} className="w-full bg-slate-50 border rounded-xl p-2 font-medium text-slate-600 outline-none cursor-pointer"><option value="All">All Classifications</option><option value="regular">Regular</option><option value="irregular">Irregular</option></select>
                 </div>
-                <div><label className="mb-1 block uppercase">Track specialization</label>                   <select value={filterTrack} onChange={e => setFilterTrack(e.target.value)} className="w-full bg-slate-50 border rounded-xl p-2 font-medium text-slate-600 outline-none"><option value="All">All Tracks</option><option value="Business Analytics">Business Analytics</option><option value="Service Management">Service Management</option><option value="Networking Technology">Networking Technology</option></select>
+                <div><label className="mb-1 block uppercase">Track specialization</label>                   <select value={filterTrack} onChange={e => setFilterTrack(e.target.value)} className="w-full bg-slate-50 border rounded-xl p-2 font-medium text-slate-600 outline-none cursor-pointer"><option value="All">All Tracks</option><option value="Business Analytics">Business Analytics</option><option value="Service Management">Service Management</option><option value="Networking Technology">Networking Technology</option></select>
                 </div>
               </div>
             )}
           </div>
-          {/* Main List Table */}
-          <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse">
+          
+          {/* --- CONSOLIDATED HIGH-EFFICIENCY SCROLLABLE CARD LAYOUT --- */}
+          <div className="bg-white rounded-3xl shadow-xs border border-slate-200/60 p-1 overflow-hidden">
+            <div className="max-h-[500px] overflow-y-auto w-full">
+              <table className="w-full text-left border-collapse table-auto">
                 <thead>
-                  <tr className="bg-slate-50 border-b text-slate-400 text-xs font-bold uppercase tracking-wider">
-                    <th className={cellPad}>Student Info</th>
+                  <tr className="bg-slate-50/90 border-b border-slate-200 text-slate-400 text-xs font-black uppercase tracking-wider sticky top-0 z-10 backdrop-blur-md">
+                    <th className={`${cellPad} pl-6`}>Student Info</th>
                     <th className={cellPad}>SR-Code</th>
                     <th className={cellPad}>Current Placement</th>
                     <th className={cellPad}>Track Matrix</th>
                     <th className={cellPad}>Curriculum Plan</th>
                     <th className={cellPad}>Status</th>
-                    <th className={`${cellPad} text-right`}>Actions</th>
+                    <th className={`${cellPad} text-right pr-6`}>Actions</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100 text-sm font-medium">
+                <tbody className="divide-y divide-slate-100 text-sm font-bold text-slate-700">
                   {directoryFilteredList.map((student) => (
-                    <tr key={student.id} onClick={() => { setSelectedStudent(student); setView('student-details'); setActiveTab('Summary'); }} className="hover:bg-slate-50/50 cursor-pointer transition">
-                      <td className={`${cellPad} font-bold text-slate-900`}>{student.lastName}, {student.firstName}</td>
-                      <td className={`${cellPad} font-bold text-blue-600`}>{student.studentId}</td>
-                      <td className={`${cellPad} text-slate-500`}>AY {student.academicYear || 'N/A'}   {student.semester || '1st Semester'}   {student.yearLevel}</td>
-                      <td className={`${cellPad} text-slate-400 text-xs`}>{student.track || 'Unassigned'}</td>
-                      <td className={cellPad}><span className="text-[10px] font-extrabold px-2 py-0.5 rounded bg-slate-100 text-slate-600">{student.course}   {student.curriculum === 'NEW' ? 'New' : 'Old'} Curriculum</span></td>
+                    <tr key={student.id} onClick={() => { setSelectedStudent(student); setView('student-details'); setActiveTab('Summary'); }} className="hover:bg-slate-50/40 cursor-pointer transition-all">
+                      <td className={`${cellPad} pl-6 text-slate-900 font-extrabold`}>{student.lastName}, {student.firstName}</td>
+                      <td className={`${cellPad} text-blue-600 font-mono tracking-wide`}>{student.studentId}</td>
+                      <td className={`${cellPad} text-slate-500 font-medium`}>AY {student.academicYear || 'N/A'} &bull; {student.semester || '1st Semester'}<span className="block text-[11px] text-slate-400 font-bold mt-0.5">{student.yearLevel}</span></td>
+                      <td className={`${cellPad} text-slate-400 font-semibold text-xs`}>{student.track || 'Unassigned'}</td>
+                      <td className={cellPad}><span className="text-[10px] font-black px-2.5 py-1 rounded-md bg-slate-100 border border-slate-200/60 text-slate-600 font-mono uppercase">{student.course} {student.curriculum === 'NEW' ? 'New' : 'Old'} Curriculum</span></td>
                       <td className={cellPad}>
-                        <span className="text-[10px] font-bold px-2.5 py-1 rounded-full uppercase tracking-wider bg-emerald-50 text-emerald-700">
+                        <span className={`text-[10px] font-black px-2.5 py-1 rounded-full uppercase tracking-wider border
+                          ${student.status === 'Dropped' 
+                            ? 'bg-rose-50 border-rose-100 text-rose-700' 
+                            : student.status === 'Regular' ? 'bg-blue-50 border-blue-100 text-blue-700'
+                            : 'bg-emerald-50 border-emerald-100 text-emerald-700'}`}
+                        >
                           {student.status || 'Active'}
                         </span>
                       </td>
-                      <td className={`${cellPad} text-right`}><ChevronRight size={18} className="text-slate-300" /></td>
+                      <td className={`${cellPad} text-right pr-6 text-slate-300`}><ChevronRight size={18} className="inline-block" /></td>
                     </tr>
                   ))}
+                  {directoryFilteredList.length === 0 && (
+                    <tr>
+                      <td colSpan="7" className="p-8 text-center text-slate-400 italic font-medium uppercase tracking-wider">No student profile records matches the chosen filter options.</td>
+                    </tr>
+                  )}
                 </tbody>
               </table>
             </div>
@@ -823,7 +789,7 @@ export default function StudentManagement() {
           {/* Main Top Header Block */}
           <div className="bg-white p-6 rounded-2xl border flex flex-col md:flex-row justify-between items-start md:items-center gap-4 text-left shadow-sm">
             <div className="flex items-center gap-4">
-              <button onClick={() => { setView('directory'); setSelectedStudent(null); }} className="w-10 h-10 flex items-center justify-center border hover:bg-slate-50 rounded-xl transition text-slate-600"><ArrowLeft size={16} /></button>
+              <button onClick={() => { setView('directory'); setSelectedStudent(null); }} className="w-10 h-10 flex items-center justify-center border hover:bg-slate-50 rounded-xl transition text-slate-600 cursor-pointer"><ArrowLeft size={16} /></button>
               <div>
                 <div className="flex items-center gap-2">
                   <h1 className="text-xl font-extrabold text-[#0f172a]">{selectedStudent.lastName}, {selectedStudent.firstName}</h1>
@@ -852,7 +818,7 @@ export default function StudentManagement() {
                     </option>
                   ))}
                 </select>
-                <button onClick={openEditModal} className="px-4 py-2.5 bg-[#0f172a] hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition">Manage Profile Configuration</button>
+                <button onClick={openEditModal} className="px-4 py-2.5 bg-[#0f172a] hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition cursor-pointer">Manage Profile Configuration</button>
               </div>
               <p className="text-[10px] text-slate-400 max-w-xs mt-1 leading-normal italic">
                 {STUDENT_STATUSES.find(s => s.value === (selectedStudent.status || 'Active'))?.desc}
@@ -862,7 +828,7 @@ export default function StudentManagement() {
           {/* Sub Tab Navigation Selection Bar */}
           <div className="flex gap-2 border-b border-slate-100 pb-0.5">
             {['Summary', 'Copy of Grades', 'Semester Plan'].map((tab) => (
-              <button key={tab} onClick={() => setActiveTab(tab)} className={`px-6 py-2.5 text-xs font-bold rounded-xl transition ${activeTab === tab ? 'bg-white text-[#0f172a] shadow-sm border border-slate-200' : 'text-slate-500 hover:text-slate-800'}`}>{tab}</button>
+              <button key={tab} onClick={() => setActiveTab(tab)} className={`px-6 py-2.5 text-xs font-bold rounded-xl transition cursor-pointer ${activeTab === tab ? 'bg-white text-[#0f172a] shadow-sm border border-slate-200' : 'text-slate-500 hover:text-slate-800'}`}>{tab}</button>
             ))}
           </div>
           <div className="space-y-6">
@@ -900,21 +866,19 @@ export default function StudentManagement() {
                 onDeleteRecord={handleDeleteRecord}
                 headerActions={
                   <>
-                    <button onClick={() => setIsPopulateModalOpen(true)} className="px-4 py-1.5 border hover:bg-blue-50 hover:text-blue-600 rounded-lg text-xs font-bold flex items-center gap-1.5 transition">
+                    <button onClick={() => setIsPopulateModalOpen(true)} className="px-4 py-1.5 border hover:bg-blue-50 hover:text-blue-600 rounded-lg text-xs font-bold flex items-center gap-1.5 transition cursor-pointer">
                       <FileSpreadsheet size={14} /> Populate Semester Form
                     </button>
-                    <button onClick={() => setIsManageModalOpen(true)} className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 transition">
+                    <button onClick={() => setIsManageModalOpen(true)} className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 transition cursor-pointer">
                       <Plus size={14} /> Add Single Subject
                     </button>
                   </>
                 }
               />
             )}
-            {/* --- TAB: SEMESTER PLAN (STRIPPED CLEAN VERSION FOR DIRECT SYSTEM ALIGNMENT) --- */}
+            {/* --- TAB: SEMESTER PLAN --- */}
             {activeTab === 'Semester Plan' && (
               <div className="space-y-8 text-left animate-fadeIn">
-
-                {/* Global Summary Badge Block */}
                 <div className="bg-white p-5 rounded-2xl border border-slate-200/70 shadow-xs flex flex-wrap gap-4 items-center justify-between">
                   <div className="flex items-center gap-3">
                     <div className="p-3 bg-blue-50 text-blue-600 rounded-xl"><Layers size={20} /></div>
@@ -937,7 +901,6 @@ export default function StudentManagement() {
                   </div>
                 </div>
 
-                {/* Unified Structured Semesters (Removed outer Card panels) */}
                 {Object.entries(generateStructuredAuditReport())
                   .sort(([a], [b]) => {
                     const yA = a.toLowerCase().includes('first') ? 1 : a.toLowerCase().includes('second') ? 2 : a.toLowerCase().includes('third') ? 3 : 4;
@@ -983,7 +946,6 @@ export default function StudentManagement() {
                                       <td className="px-5 py-3.5 font-black text-slate-950 tracking-wide">{c.code}</td>
                                       <td className="px-5 py-3.5 font-medium text-slate-600">{c.title}</td>
                                       <td className="px-5 py-3.5 text-center text-slate-950 font-black">{c.units}</td>
-
                                       <td className="px-5 py-3.5">
                                         {c.prereqs.length > 0 ? (
                                           <div className="space-y-1">
@@ -1030,7 +992,7 @@ export default function StudentManagement() {
       {/* ================= VIEW 3: ADMIT NEW STUDENT ENTRY FORM ================= */}
       {view === 'add-student' && (
         <div className="max-w-5xl mx-auto space-y-6 text-left animate-fadeIn">
-          <button onClick={() => setView('directory')} className="text-slate-500 hover:text-slate-800 font-semibold text-sm flex items-center gap-2"><ArrowLeft size={16} /> Back to Directory</button>
+          <button onClick={() => setView('directory')} className="text-slate-500 hover:text-slate-800 font-semibold text-sm flex items-center gap-2 cursor-pointer"><ArrowLeft size={16} /> Back to Directory</button>
 
           <div className="flex items-center gap-3">
             <div className="p-3 bg-blue-50 text-blue-600 rounded-xl"><Plus size={24} /></div>
@@ -1045,7 +1007,7 @@ export default function StudentManagement() {
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
                   <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Program / Course Map</label>
-                  <select value={newStudent.course} onChange={e => setNewStudent({ ...newStudent, course: e.target.value })} className="w-full bg-slate-50 border rounded-xl p-2.5 text-xs font-semibold outline-none">
+                  <select value={newStudent.course} onChange={e => setNewStudent({ ...newStudent, course: e.target.value })} className="w-full bg-slate-50 border rounded-xl p-2.5 text-xs font-semibold outline-none cursor-pointer">
                     {COURSE_LIST.map(c => <option key={c} value={c}>{c}</option>)}
                   </select>
                 </div>
@@ -1058,7 +1020,7 @@ export default function StudentManagement() {
                     disabled={newStudent.admissionType === 'Freshman'}
                     value={newStudent.yearLevel}
                     onChange={e => setNewStudent({ ...newStudent, yearLevel: e.target.value })}
-                    className={`w-full ${newStudent.admissionType === 'Freshman' ? 'bg-slate-100 text-slate-500 border-slate-100 cursor-not-allowed shadow-none' : 'bg-slate-50 border-slate-200'} border rounded-xl p-2.5 text-xs font-semibold outline-none`}
+                    className={`w-full ${newStudent.admissionType === 'Freshman' ? 'bg-slate-100 text-slate-500 border-slate-100 cursor-not-allowed shadow-none' : 'bg-slate-50 border-slate-200'} border rounded-xl p-2.5 text-xs font-semibold outline-none cursor-pointer`}
                   >
                     <option value="First Year">First Year</option>
                     <option value="Second Year">Second Year</option>
@@ -1075,13 +1037,12 @@ export default function StudentManagement() {
                     disabled={newStudent.admissionType === 'Freshman'}
                     value={newStudent.semester}
                     onChange={e => setNewStudent({ ...newStudent, semester: e.target.value })}
-                    className={`w-full ${newStudent.admissionType === 'Freshman' ? 'bg-slate-100 text-slate-500 border-slate-100 cursor-not-allowed shadow-none' : 'bg-slate-50 border-slate-200'} border rounded-xl p-2.5 text-xs font-semibold outline-none`}
+                    className={`w-full ${newStudent.admissionType === 'Freshman' ? 'bg-slate-100 text-slate-500 border-slate-100 cursor-not-allowed shadow-none' : 'bg-slate-50 border-slate-200'} border rounded-xl p-2.5 text-xs font-semibold outline-none cursor-pointer`}
                   >
                     {SEMESTER_LIST.map(s => <option key={s} value={s}>{s}</option>)}
                   </select>
                 </div>
 
-                {/* Specialization Track */}
                 <div>
                   <label className="block text-xs font-bold text-slate-400 uppercase mb-1 flex items-center gap-1">
                     Specialization Track
@@ -1091,7 +1052,7 @@ export default function StudentManagement() {
                     value={newStudent.track}
                     disabled={normalizeYear(newStudent.yearLevel) === '1' || normalizeYear(newStudent.yearLevel) === '2'}
                     onChange={e => setNewStudent({ ...newStudent, track: e.target.value })}
-                    className={`w-full ${normalizeYear(newStudent.yearLevel) === '1' || normalizeYear(newStudent.yearLevel) === '2' ? 'bg-slate-100 text-slate-400 border-slate-100 cursor-not-allowed shadow-none' : 'bg-slate-50 text-amber-700 font-bold border-slate-200'} border rounded-xl p-2.5 text-xs font-semibold outline-none`}
+                    className={`w-full ${normalizeYear(newStudent.yearLevel) === '1' || normalizeYear(newStudent.yearLevel) === '2' ? 'bg-slate-100 text-slate-400 border-slate-100 cursor-not-allowed shadow-none' : 'bg-slate-50 text-amber-700 font-bold border-slate-200'} border rounded-xl p-2.5 text-xs font-semibold outline-none cursor-pointer`}
                   >
                     <option value="">Select Specialization Track</option>
                     <option value="Business Analytics">Business Analytics</option>
@@ -1122,7 +1083,7 @@ export default function StudentManagement() {
                     disabled={newStudent.admissionType === 'Freshman'}
                     value={newStudent.academicYear}
                     onChange={e => setNewStudent({ ...newStudent, academicYear: e.target.value })}
-                    className={`w-full ${newStudent.admissionType === 'Freshman' ? 'bg-slate-100 text-slate-500 border-slate-100 cursor-not-allowed shadow-none' : 'bg-slate-50 text-slate-900 border-slate-200'} border rounded-xl p-2.5 text-xs font-semibold outline-none`}
+                    className={`w-full ${newStudent.admissionType === 'Freshman' ? 'bg-slate-100 text-slate-500 border-slate-100 cursor-not-allowed shadow-none' : 'bg-slate-50 text-slate-900 border-slate-200'} border rounded-xl p-2.5 text-xs font-semibold outline-none cursor-pointer`}
                   >
                     {ACADEMIC_YEARS_LIST.map(year => (
                       <option key={year} value={year}>{year}</option>
@@ -1134,7 +1095,6 @@ export default function StudentManagement() {
                     Academic Year *
                     <Lock size={12} className="text-slate-400" />
                   </label>
-                  {/* Read-only mirror of the registrar's active A.Y. (Settings > Academic Year). */}
                   <select
                     disabled
                     value={activeAcademicYear}
@@ -1148,7 +1108,7 @@ export default function StudentManagement() {
                   <select
                     value={newStudent.admissionType}
                     onChange={e => setNewStudent({ ...newStudent, admissionType: e.target.value })}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs font-semibold outline-none"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs font-semibold outline-none cursor-pointer"
                   >
                     {ADMISSION_TYPES.map(type => (
                       <option key={type} value={type}>{type}</option>
@@ -1160,7 +1120,7 @@ export default function StudentManagement() {
                   <select
                     value={newStudent.status}
                     onChange={e => setNewStudent({ ...newStudent, status: e.target.value })}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs font-semibold outline-none"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs font-semibold outline-none cursor-pointer"
                   >
                     {STUDENT_STATUSES.map(s => (
                       <option key={s.value} value={s.value} title={s.desc}>{s.label}</option>
@@ -1191,9 +1151,6 @@ export default function StudentManagement() {
                     Official Email Address *
                     <Lock size={12} className="text-slate-400" />
                   </label>
-                  {/* Never hand-typed — always derived from the SR-Code so it's
-                      guaranteed to match the email the student's claim flow will
-                      derive and Firebase Auth will issue. */}
                   <input
                     type="text" disabled
                     value={newStudent.studentId ? deriveEmail(newStudent.studentId) : ''}
@@ -1217,7 +1174,6 @@ export default function StudentManagement() {
                 </div>
               </div>
             </div>
-            {/* ================= PREVIEW COMPONENT ================= */}
             <div className="bg-white border rounded-2xl p-6 shadow-sm">
               <div className="flex justify-between items-center mb-4">
                 <h3 className="font-extrabold text-slate-900 text-sm">Course Load Pre-loaded Matrix Preview</h3>
@@ -1247,8 +1203,8 @@ export default function StudentManagement() {
               </table>
             </div>
             <div className="flex justify-end gap-3">
-              <button type="button" onClick={() => setView('directory')} className="px-5 py-2 border rounded-xl font-bold text-xs text-slate-400 hover:bg-slate-50">Cancel</button>
-              <button type="submit" className="bg-blue-600 text-white font-bold px-6 py-2 rounded-xl text-xs shadow-xs hover:bg-blue-700">Admit Student Profile</button>
+              <button type="button" onClick={() => setView('directory')} className="px-5 py-2 border rounded-xl font-bold text-xs text-slate-400 hover:bg-slate-50 cursor-pointer">Cancel</button>
+              <button type="submit" className="bg-blue-600 text-white font-bold px-6 py-2 rounded-xl text-xs shadow-xs hover:bg-blue-700 cursor-pointer">Admit Student Profile</button>
             </div>
           </form>
         </div>
@@ -1259,7 +1215,7 @@ export default function StudentManagement() {
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-xl p-6 border border-slate-100 max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center border-b pb-4 mb-4">
               <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2"><Edit3 size={18} className="text-blue-600" /> Edit Student Records Configuration</h3>
-              <button onClick={() => setIsEditModalOpen(false)} className="text-slate-400 hover:text-slate-700 transition"><X size={20} /></button>
+              <button onClick={() => setIsEditModalOpen(false)} className="text-slate-400 hover:text-slate-700 transition cursor-pointer"><X size={20} /></button>
             </div>
             <form onSubmit={handleEditStudentSubmit} className="space-y-4 text-sm">
               <div className="grid grid-cols-3 gap-3">
@@ -1283,7 +1239,7 @@ export default function StudentManagement() {
                     disabled={editStudentForm.admissionType === 'Freshman'}
                     value={editStudentForm.academicYear}
                     onChange={e => setEditStudentForm({ ...editStudentForm, academicYear: e.target.value })}
-                    className={`w-full ${editStudentForm.admissionType === 'Freshman' ? 'bg-slate-100 text-slate-400 border-slate-100 cursor-not-allowed shadow-none' : 'bg-slate-50 border-slate-200'} border rounded-xl p-2.5 text-sm outline-none`}
+                    className={`w-full ${editStudentForm.admissionType === 'Freshman' ? 'bg-slate-100 text-slate-400 border-slate-100 cursor-not-allowed shadow-none' : 'bg-slate-50 border-slate-200'} border rounded-xl p-2.5 text-sm outline-none cursor-pointer`}
                   >
                     {ACADEMIC_YEARS_LIST.map(year => <option key={year} value={year}>{year}</option>)}
                   </select>
@@ -1296,7 +1252,7 @@ export default function StudentManagement() {
                     disabled={editStudentForm.admissionType === 'Freshman'}
                     value={editStudentForm.semester}
                     onChange={e => setEditStudentForm({ ...editStudentForm, semester: e.target.value })}
-                    className={`w-full ${editStudentForm.admissionType === 'Freshman' ? 'bg-slate-100 text-slate-400 border-slate-100 cursor-not-allowed shadow-none' : 'bg-slate-50 border-slate-200'} border rounded-xl p-2.5 text-sm outline-none`}
+                    className={`w-full ${editStudentForm.admissionType === 'Freshman' ? 'bg-slate-100 text-slate-400 border-slate-100 cursor-not-allowed shadow-none' : 'bg-slate-50 border-slate-200'} border rounded-xl p-2.5 text-sm outline-none cursor-pointer`}
                   >
                     {SEMESTER_LIST.map(sem => <option key={sem} value={sem}>{sem}</option>)}
                   </select>
@@ -1333,13 +1289,13 @@ export default function StudentManagement() {
               <div className="grid grid-cols-3 gap-3 text-xs font-semibold">
                 <div>
                   <label className="block mb-1">Admission Type *</label>
-                  <select value={editStudentForm.admissionType} onChange={e => setEditStudentForm({ ...editStudentForm, admissionType: e.target.value })} className="w-full border rounded-xl p-2.5 outline-none bg-white font-medium">
+                  <select value={editStudentForm.admissionType} onChange={e => setEditStudentForm({ ...editStudentForm, admissionType: e.target.value })} className="w-full border rounded-xl p-2.5 outline-none bg-white font-medium cursor-pointer">
                     {ADMISSION_TYPES.map(type => <option key={type} value={type}>{type}</option>)}
                   </select>
                 </div>
                 <div>
                   <label className="block mb-1">Status Profile *</label>
-                  <select value={editStudentForm.status} onChange={e => setEditStudentForm({ ...editStudentForm, status: e.target.value })} className="w-full border rounded-xl p-2.5 outline-none bg-white font-medium">
+                  <select value={editStudentForm.status} onChange={e => setEditStudentForm({ ...editStudentForm, status: e.target.value })} className="w-full border rounded-xl p-2.5 outline-none bg-white font-medium cursor-pointer">
                     {STUDENT_STATUSES.map(status => <option key={status.value} value={status.value} title={status.desc}>{status.label}</option>)}
                   </select>
                 </div>
@@ -1370,7 +1326,7 @@ export default function StudentManagement() {
                   value={editStudentForm.track}
                   disabled={normalizeYear(editStudentForm.yearLevel) === '1' || normalizeYear(editStudentForm.yearLevel) === '2'}
                   onChange={e => setEditStudentForm({ ...editStudentForm, track: e.target.value })}
-                  className={`w-full ${normalizeYear(editStudentForm.yearLevel) === '1' || normalizeYear(editStudentForm.yearLevel) === '2' ? 'bg-slate-100 text-slate-400 border-slate-100 cursor-not-allowed shadow-none' : 'bg-white text-slate-900'} border rounded-xl p-2.5 text-sm outline-none`}
+                  className={`w-full ${normalizeYear(editStudentForm.yearLevel) === '1' || normalizeYear(editStudentForm.yearLevel) === '2' ? 'bg-slate-100 text-slate-400 border-slate-100 cursor-not-allowed shadow-none' : 'bg-white text-slate-900'} border rounded-xl p-2.5 text-sm outline-none cursor-pointer`}
                 >
                   <option value="">Select Specialization Track</option>
                   <option value="Business Analytics">Business Analytics</option>
@@ -1379,8 +1335,8 @@ export default function StudentManagement() {
                 </select>
               </div>
               <div className="flex justify-end gap-3 pt-4 border-t">
-                <button type="button" onClick={() => setIsEditModalOpen(false)} className="px-4 py-2 border rounded-xl font-semibold hover:bg-slate-50">Cancel</button>
-                <button type="submit" className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-xl font-bold flex items-center gap-1.5"><Save size={16} /> Save Profiles</button>
+                <button type="button" onClick={() => setIsEditModalOpen(false)} className="px-4 py-2 border rounded-xl font-semibold hover:bg-slate-50 cursor-pointer">Cancel</button>
+                <button type="submit" className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-xl font-bold flex items-center gap-1.5 cursor-pointer"><Save size={16} /> Save Profiles</button>
               </div>
             </form>
           </div>
@@ -1399,7 +1355,7 @@ export default function StudentManagement() {
                   disabled={isManualCatalogLoading || manualEntryCatalog.length === 0}
                   value={newSubjectRecord.subjectCode}
                   onChange={e => handleManualSubjectCodeChange(e.target.value)}
-                  className={`w-full border p-2.5 rounded-xl outline-none font-medium ${isManualCatalogLoading || manualEntryCatalog.length === 0 ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : 'bg-white'}`}
+                  className={`w-full border p-2.5 rounded-xl outline-none font-medium ${isManualCatalogLoading || manualEntryCatalog.length === 0 ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : 'bg-white'} cursor-pointer`}
                 >
                   <option value="">
                     {isManualCatalogLoading
@@ -1443,7 +1399,7 @@ export default function StudentManagement() {
                 </div>
                 <div>
                   <label className="block text-slate-500 mb-1">Academic Year Term</label>
-                  <select value={newSubjectRecord.term} onChange={e => handleManualScopeChange({ term: e.target.value })} className="w-full border p-2.5 rounded-xl outline-none bg-white font-medium">
+                  <select value={newSubjectRecord.term} onChange={e => handleManualScopeChange({ term: e.target.value })} className="w-full border p-2.5 rounded-xl outline-none bg-white font-medium cursor-pointer">
                     {ACADEMIC_YEARS_LIST.map(y => <option key={y} value={y}>{y}</option>)}
                   </select>
                 </div>
@@ -1451,27 +1407,27 @@ export default function StudentManagement() {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-slate-500 mb-1">Year Level Placement</label>
-                  <select value={newSubjectRecord.yearLevel} onChange={e => handleManualScopeChange({ yearLevel: e.target.value })} className="w-full border p-2.5 rounded-xl outline-none bg-white font-medium">
+                  <select value={newSubjectRecord.yearLevel} onChange={e => handleManualScopeChange({ yearLevel: e.target.value })} className="w-full border p-2.5 rounded-xl outline-none bg-white font-medium cursor-pointer">
                     {YEAR_LEVELS.map(y => <option key={y} value={y}>{y}</option>)}
                   </select>
                 </div>
                 <div>
                   <label className="block text-slate-500 mb-1">Target Semester</label>
-                  <select value={newSubjectRecord.semester} onChange={e => handleManualScopeChange({ semester: e.target.value })} className="w-full border p-2.5 rounded-xl outline-none bg-white font-medium">
+                  <select value={newSubjectRecord.semester} onChange={e => handleManualScopeChange({ semester: e.target.value })} className="w-full border p-2.5 rounded-xl outline-none bg-white font-medium cursor-pointer">
                     {SEMESTER_LIST.map(s => <option key={s} value={s}>{s}</option>)}
                   </select>
                 </div>
               </div>
               <div>
                 <label className="block text-slate-500 mb-1">Initial Grade Rating</label>
-                <select value={newSubjectRecord.grade} onChange={e => setNewSubjectRecord({ ...newSubjectRecord, grade: e.target.value })} className="w-full border p-2.5 rounded-xl outline-none bg-white font-medium">
+                <select value={newSubjectRecord.grade} onChange={e => setNewSubjectRecord({ ...newSubjectRecord, grade: e.target.value })} className="w-full border p-2.5 rounded-xl outline-none bg-white font-medium cursor-pointer">
                   <option value="In Progress">In Progress</option>
                   {BATSTATEU_GRADES.map(g => <option key={g} value={g}>{g}</option>)}
                 </select>
               </div>
               <div className="flex justify-end gap-2 pt-4 border-t">
-                <button type="button" onClick={() => setIsManageModalOpen(false)} className="px-4 py-2 border rounded-xl text-slate-500 hover:bg-slate-50">Cancel</button>
-                <button type="submit" className="bg-blue-600 text-white px-4 py-2 rounded-xl">Append Node</button>
+                <button type="button" onClick={() => setIsManageModalOpen(false)} className="px-4 py-2 border rounded-xl text-slate-500 hover:bg-slate-50 cursor-pointer">Cancel</button>
+                <button type="submit" className="bg-blue-600 text-white px-4 py-2 rounded-xl cursor-pointer">Append Node</button>
               </div>
             </form>
           </div>
@@ -1490,25 +1446,25 @@ export default function StudentManagement() {
             <form onSubmit={handlePopulateSemester} className="space-y-4 text-xs font-semibold">
               <div>
                 <label className="block text-slate-500 mb-1">Select Year Level</label>
-                <select value={populateForm.yearLevel} onChange={e => setPopulateForm({ ...populateForm, yearLevel: e.target.value })} className="w-full border p-2.5 rounded-xl outline-none bg-white font-medium">
+                <select value={populateForm.yearLevel} onChange={e => setPopulateForm({ ...populateForm, yearLevel: e.target.value })} className="w-full border p-2.5 rounded-xl outline-none bg-white font-medium cursor-pointer">
                   {YEAR_LEVELS.map(y => <option key={y} value={y}>{y}</option>)}
                 </select>
               </div>
               <div>
                 <label className="block text-slate-500 mb-1">Select Semester</label>
-                <select value={populateForm.semester} onChange={e => setPopulateForm({ ...populateForm, semester: e.target.value })} className="w-full border p-2.5 rounded-xl outline-none bg-white font-medium">
+                <select value={populateForm.semester} onChange={e => setPopulateForm({ ...populateForm, semester: e.target.value })} className="w-full border p-2.5 rounded-xl outline-none bg-white font-medium cursor-pointer">
                   {SEMESTER_LIST.map(s => <option key={s} value={s}>{s}</option>)}
                 </select>
               </div>
               <div>
                 <label className="block text-slate-500 mb-1">Academic Year Term</label>
-                <select value={populateForm.term} onChange={e => setPopulateForm({ ...populateForm, term: e.target.value })} className="w-full border p-2.5 rounded-xl outline-none bg-white font-medium">
+                <select value={populateForm.term} onChange={e => setPopulateForm({ ...populateForm, term: e.target.value })} className="w-full border p-2.5 rounded-xl outline-none bg-white font-medium cursor-pointer">
                   {ACADEMIC_YEARS_LIST.map(y => <option key={y} value={y}>{y}</option>)}
                 </select>
               </div>
               <div className="flex justify-end gap-2 pt-4 border-t">
-                <button type="button" onClick={() => setIsPopulateModalOpen(false)} className="px-4 py-2 border rounded-xl text-slate-500 hover:bg-slate-50">Cancel</button>
-                <button type="submit" className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl">Load Template</button>
+                <button type="button" onClick={() => setIsPopulateModalOpen(false)} className="px-4 py-2 border rounded-xl text-slate-500 hover:bg-slate-50 cursor-pointer">Cancel</button>
+                <button type="submit" className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl cursor-pointer">Load Template</button>
               </div>
             </form>
           </div>

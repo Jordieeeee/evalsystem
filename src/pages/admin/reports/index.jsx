@@ -1,8 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { 
-  Printer, FileSpreadsheet, Scroll, 
-  CheckCircle2, Calendar, ClipboardCheck, GraduationCap, ShieldAlert,
-  ArrowUpRight, BarChart3, TrendingUp, HelpCircle
+  Printer, BarChart3, TrendingUp, HelpCircle, ArrowUpRight, Search, X 
 } from 'lucide-react';
 import LoadingState from '../../../components/LoadingState';
 import { studentService } from '../../../services/studentService';
@@ -86,6 +84,7 @@ export default function AdminReportsPage() {
         setLoading(false);
       }
     };
+
     fetchAllReportData();
   }, []);
 
@@ -95,6 +94,14 @@ export default function AdminReportsPage() {
   }, [evaluations, evaluationFilter]);
 
   const triggerPrint = () => window.print();
+
+  // Functional Filtering Rule: Query strings check name values or direct code nodes
+  const filteredStudents = students.filter(s => {
+    const fullName = `${s.firstName || ''} ${s.lastName || ''}`.toLowerCase();
+    const studentId = String(s.id || '').toLowerCase();
+    const cleanQuery = searchQuery.toLowerCase().trim();
+    return fullName.includes(cleanQuery) || studentId.includes(cleanQuery);
+  });
 
   if (loading) {
     return <LoadingState label="Compiling Report Matrices..." />;
@@ -117,9 +124,9 @@ export default function AdminReportsPage() {
             Generate and export verified registrar checksheets, sequence metrics, and activity trail ledgers.
           </p>
         </div>
-        
+         
         <button 
-          onClick={triggerPrint} 
+          onClick={triggerPrint}
           className="group flex items-center justify-center gap-2 bg-[#7D1924] hover:bg-[#63121b] text-white text-xs font-black uppercase tracking-wider px-6 py-3.5 rounded-2xl transition-all duration-200 shadow-md hover:shadow-lg active:scale-[0.98] w-full sm:w-auto"
         >
           <Printer size={14} className="group-hover:rotate-6 transition-transform" /> 
@@ -138,7 +145,7 @@ export default function AdminReportsPage() {
           { title: "Returnees Log", value: summary.totalReturning, change: "LOA resumption" },
         ].map((card, i) => (
           <div 
-            key={i} 
+            key={i}
             className={`p-5 rounded-2xl transition-all duration-200 border ${
               card.highlight 
                 ? 'bg-gradient-to-br from-[#7D1924] to-[#5a1018] border-transparent text-white shadow-md hover:scale-[1.02]' 
@@ -163,7 +170,7 @@ export default function AdminReportsPage() {
 
       {/* ================= WORKSPACE SPLIT WORKBENCH LAYOUT ================= */}
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 items-start">
-        
+         
         {/* REPORT OPTION SIDEBAR SELECTOR */}
         <div className="bg-white rounded-2xl border border-slate-200/60 p-3 space-y-1 shadow-2xs print-hidden">
           <span className="text-[9px] font-black text-slate-400 tracking-widest block uppercase px-3 pt-2 pb-1.5 border-b border-slate-50 mb-1">
@@ -230,53 +237,90 @@ export default function AdminReportsPage() {
           <div className="space-y-6">
             {/* Dynamic Core Report View Render Routing */}
             {activeReport === 'student' && (
-              <div className="space-y-5">
-                <div className="border-b border-slate-100 pb-4">
-                  <h3 className="text-lg font-black text-slate-900 tracking-tight uppercase">Student Master Directory</h3>
-                  <p className="text-slate-400 text-xs font-medium mt-0.5">Comprehensive enrollment tracking, program distributions, and academic standings.</p>
+              <div className="space-y-4">
+                <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4 border-b border-slate-100 pb-3">
+                  <div>
+                    <h3 className="text-base font-black text-slate-900 tracking-tight uppercase">Student Master Directory</h3>
+                    <p className="text-slate-400 text-[11px] font-medium mt-0.5">Comprehensive enrollment tracking, program distributions, and academic standings.</p>
+                  </div>
+
+                  {/* DIRECTORY LOCAL SEARCH BAR ENGINE */}
+                  <div className="relative w-full sm:w-64 print-hidden">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={13} />
+                    <input
+                      type="text"
+                      placeholder="Search directory logs..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-8.5 pr-8 py-1.5 text-xs font-semibold text-slate-700 focus:outline-none focus:ring-1 focus:ring-[#7D1924] focus:border-[#7D1924] placeholder-slate-400 transition-all"
+                    />
+                    {searchQuery && (
+                      <button 
+                        onClick={() => setSearchQuery('')}
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
+                      >
+                        <X size={13} />
+                      </button>
+                    )}
+                  </div>
                 </div>
-                <div className="overflow-x-auto">
+
+                {/* SCROLLABLE TABLE WINDOW CARD CONTAINER */}
+                <div className="overflow-x-auto max-h-[500px] overflow-y-auto border border-slate-100 rounded-xl shadow-2xs scrollbar-thin">
                   <table className="w-full text-left text-xs border-collapse">
-                    <thead>
-                      <tr className="bg-slate-50/70 border-b border-slate-100 text-slate-400 text-[10px] font-black uppercase tracking-wider">
-                        <th className="p-3 pl-4">Student Identity</th>
-                        <th className="p-3">Program</th>
-                        <th className="p-3">Plan Profile</th>
-                        <th className="p-3">Admission</th>
-                        <th className="p-3">Sequence Tracking</th>
-                        <th className="p-3 pr-4 text-right">Standing</th>
+                    <thead className="sticky top-0 bg-white z-10 shadow-[0_1px_0_0_rgba(241,245,249,1)]">
+                      <tr className="bg-slate-50/90 text-slate-400 text-[10px] font-black uppercase tracking-wider">
+                        <th className="py-2.5 px-3 pl-4">Student Identity</th>
+                        <th className="py-2.5 px-3">Program</th>
+                        <th className="py-2.5 px-3">Plan Profile</th>
+                        <th className="py-2.5 px-3">Admission</th>
+                        <th className="py-2.5 px-3">Sequence Tracking</th>
+                        <th className="py-2.5 px-3 pr-4 text-right">Standing</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 font-semibold text-slate-600">
-                      {students.map(s => (
+                      {filteredStudents.map(s => (
                         <tr key={s.id} className="hover:bg-slate-50/30 transition-colors">
-                          <td className="p-3 pl-4 font-black text-slate-900">
-                            {s.lastName}, {s.firstName}
-                            <span className="block font-mono text-[10px] text-slate-400 font-bold mt-0.5">{s.id}</span>
+                          <td className="py-2 px-3 pl-4 font-black text-slate-900 whitespace-nowrap">
+                            {s.lastName && s.firstName ? `${s.lastName}, ${s.firstName}` : s.id}
+                            <span className="block font-mono text-[9px] text-slate-400 font-bold mt-0.5">{s.id}</span>
                           </td>
-                          <td className="p-3 text-slate-700">{s.course || s.program}</td>
-                          <td className="p-3">
-                            <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-slate-100 border border-slate-200/50 text-slate-600 font-mono">
+                          <td className="py-2 px-3 text-slate-700 font-bold">{s.course || s.program}</td>
+                          <td className="py-2 px-3">
+                            <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-slate-100 border border-slate-200/50 text-slate-600 font-mono">
                               {s.curriculum === 'NEW' ? 'NEW v2.0' : 'OLD v1.0'}
                             </span>
                           </td>
-                          <td className="p-3 font-medium">{s.admissionType || 'Regular'}</td>
-                          <td className="p-3">
-                            <span className={`px-2 py-0.5 rounded text-[10px] uppercase font-black tracking-tight border ${
-                              s.classification === 'irregular' 
-                                ? 'bg-amber-50 border-amber-200/60 text-amber-700' 
+                          <td className="py-2 px-3 font-medium text-slate-500">{s.admissionType || 'Regular'}</td>
+                          <td className="py-2 px-3">
+                            <span className={`px-1.5 py-0.5 rounded text-[9px] uppercase font-black tracking-tight border ${
+                              String(s.classification).toLowerCase() === 'irregular'
+                                ? 'bg-amber-50 border-amber-200/60 text-amber-700'
                                 : 'bg-blue-50 border-blue-200/60 text-blue-700'
                             }`}>
                               {s.classification || 'regular'}
                             </span>
                           </td>
-                          <td className="p-3 pr-4 text-right">
-                            <span className="text-[10px] font-black tracking-wide uppercase px-2.5 py-1 rounded-full bg-emerald-50 border border-emerald-100 text-emerald-700">
+                          <td className="py-2 px-3 pr-4 text-right">
+                            <span className={`text-[9px] font-black tracking-wide uppercase px-2 py-0.5 rounded-full border ${
+                              String(s.status).toLowerCase() === 'dropped'
+                                ? 'bg-rose-50 border-rose-100 text-rose-700'
+                                : String(s.status).toLowerCase() === 'regular'
+                                ? 'bg-sky-50 border-sky-100 text-sky-700'
+                                : 'bg-emerald-50 border-emerald-100 text-emerald-700'
+                            }`}>
                               {s.status || 'Active'}
                             </span>
                           </td>
                         </tr>
                       ))}
+                      {filteredStudents.length === 0 && (
+                        <tr>
+                          <td colSpan="6" className="py-8 text-center text-slate-400 font-medium italic">
+                            No matching records found in this dataset view.
+                          </td>
+                        </tr>
+                      )}
                     </tbody>
                   </table>
                 </div>

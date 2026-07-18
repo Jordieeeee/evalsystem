@@ -1,285 +1,245 @@
 import { useState, useEffect } from 'react';
-import { 
-  User, 
-  Calendar, 
-  Bell, 
-  ShieldCheck, 
-  Save, 
-  CheckCircle2,
-  Loader2
-} from 'lucide-react';
-// CRITICAL: Ensure this path correctly points to your services folder
+import { User, Calendar, Save, CheckCircle2, Loader2 } from 'lucide-react';
 import LoadingState from '../../../components/LoadingState';
 import { systemService } from '../../../services/systemService';
 
 export default function AdminSettingsPage() {
   const [activeSubTab, setActiveSubTab] = useState('General');
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveSuccess, setSaveSuccess] = useState(false);
 
-  // --- GENERAL SETTINGS STATES ---
+  // --- FORM DATA REGISTRIES ---
   const [generalInfo, setGeneralInfo] = useState({
-    universityName: 'The Last Salle University',
-    shortName: 'TLSU',
-    contactEmail: 'admin@tlsu.edu'
+    universityName: '',
+    shortName: '',
+    contactEmail: ''
   });
+
   const [displaySettings, setDisplaySettings] = useState({
     compactTable: true,
     showActivityFeed: true
   });
-  const [isLoadingGeneral, setIsLoadingGeneral] = useState(true);
-  const [isSavingGeneral, setIsSavingGeneral] = useState(false);
-  const [saveSuccessGeneral, setSaveSuccessGeneral] = useState(false);
 
-  // Fetch the live general/display settings from Firebase on mount
-  useEffect(() => {
-    let isMounted = true;
-    const fetchGeneralSettings = async () => {
-      try {
-        const settings = await systemService.getGeneralSettings();
-        if (isMounted && settings) {
-          setGeneralInfo({
-            universityName: settings.universityName,
-            shortName: settings.shortName,
-            contactEmail: settings.contactEmail
-          });
-          setDisplaySettings({
-            compactTable: settings.compactTable,
-            showActivityFeed: settings.showActivityFeed
-          });
-        }
-      } catch (error) {
-        console.error("Failed to load general settings", error);
-      } finally {
-        if (isMounted) setIsLoadingGeneral(false);
-      }
-    };
-    fetchGeneralSettings();
-    return () => { isMounted = false; };
-  }, []);
-
-  // --- ACADEMIC CONFIG STATES ---
   const [academicConfig, setAcademicConfig] = useState({
-    activeYear: '2026-2027',
-    activeSemester: '1st Semester'
+    activeYear: '',
+    activeSemester: ''
   });
-  const [isLoadingAcademic, setIsLoadingAcademic] = useState(true);
-  const [isSavingAcademic, setIsSavingAcademic] = useState(false);
-  const [saveSuccessAcademic, setSaveSuccessAcademic] = useState(false);
 
-  // Fetch the live academic config from Firebase on mount
+  // --- SAFELY PRELOAD ALL SYSTEM VARIABLES ON MOUNT ---
   useEffect(() => {
     let isMounted = true;
-    const fetchConfig = async () => {
+    const loadSystemPreferences = async () => {
       try {
-        const config = await systemService.getAcademicConfig();
-        if (isMounted && config) {
-          setAcademicConfig({
-            activeYear: config.activeYear || '2026-2027',
-            activeSemester: config.activeSemester || '1st Semester'
-          });
+        setIsLoading(true);
+        const [general, academic] = await Promise.all([
+          systemService.getGeneralSettings(),
+          systemService.getAcademicConfig()
+        ]);
+
+        if (isMounted) {
+          if (general) {
+            setGeneralInfo({
+              universityName: general.universityName || 'The Last Salle University',
+              shortName: general.shortName || 'TLSU',
+              contactEmail: general.contactEmail || 'admin@tlsu.edu'
+            });
+            setDisplaySettings({
+              compactTable: general.compactTable ?? true,
+              showActivityFeed: general.showActivityFeed ?? true
+            });
+          }
+          if (academic) {
+            setAcademicConfig({
+              activeYear: academic.activeYear || '2026-2027',
+              activeSemester: academic.activeSemester || '1st Semester'
+            });
+          }
         }
       } catch (error) {
-        console.error("Failed to load academic config", error);
+        console.error("Critical failure resolving settings architecture bounds:", error);
       } finally {
-        if (isMounted) setIsLoadingAcademic(false);
+        if (isMounted) setIsLoading(false);
       }
     };
-    fetchConfig();
+
+    loadSystemPreferences();
     return () => { isMounted = false; };
   }, []);
 
-  // --- HANDLERS ---
-  const handleGeneralChange = (e) => {
+  // --- PERSISTENCE HANDLERS ---
+  const handleInputChange = (e, stateSetter) => {
     const { name, value } = e.target;
-    setGeneralInfo(prev => ({ ...prev, [name]: value }));
+    stateSetter(prev => ({ ...prev, [name]: value }));
   };
 
-  const handleToggle = async (key) => {
+  const handleDisplayToggle = async (key) => {
     const nextValue = !displaySettings[key];
     setDisplaySettings(prev => ({ ...prev, [key]: nextValue }));
     try {
       await systemService.updateGeneralSettings({ [key]: nextValue });
     } catch (error) {
-      console.error("Failed to save display setting:", error);
+      console.error("Failed to commit live layout setting change:", error);
       setDisplaySettings(prev => ({ ...prev, [key]: !nextValue }));
-      alert("Failed to save display setting. Check the browser console.");
     }
   };
 
-  const handleSaveGeneral = async (e) => {
+  const handleFormSubmit = async (e, updateFn, payload) => {
     e.preventDefault();
-    setIsSavingGeneral(true);
-    setSaveSuccessGeneral(false);
+    setIsSaving(true);
+    setSaveSuccess(false);
     try {
-      await systemService.updateGeneralSettings(generalInfo);
-      setSaveSuccessGeneral(true);
-      setTimeout(() => setSaveSuccessGeneral(false), 3000);
+      await updateFn(payload);
+      setSaveSuccess(true);
+      setTimeout(() => setSaveSuccess(false), 3000);
     } catch (error) {
-      console.error("Failed to update general settings:", error);
-      alert("Failed to save! Check the browser console. You may need to update your Firestore security rules to allow writes to the 'system_settings' collection.");
+      console.error("Strategic settings rewrite transaction failed:", error);
+      alert("Strategic matrix write rejected. Confirm firestore collection write rule parameters.");
     } finally {
-      setIsSavingGeneral(false);
+      setIsSaving(false);
     }
   };
 
-  // The fixed Academic Config Save Function
-  const handleSaveAcademicConfig = async (e) => {
-    e.preventDefault();
-    setIsSavingAcademic(true);
-    setSaveSuccessAcademic(false);
-    
-    try {
-      // Pushes the update to Firebase
-      await systemService.updateAcademicConfig(academicConfig);
-      
-      // Trigger success UI
-      setSaveSuccessAcademic(true);
-      setTimeout(() => setSaveSuccessAcademic(false), 3000);
-    } catch (error) {
-      console.error("Failed to update system config:", error);
-      alert("Failed to save! Check the browser console. You may need to update your Firestore security rules to allow writes to the 'system_settings' collection.");
-    } finally {
-      setIsSavingAcademic(false);
-    }
-  };
+  if (isLoading) {
+    return <LoadingState label="Resolving System Environment Matrix..." className="py-20" />;
+  }
 
   const subNavItems = [
-    { name: 'General', icon: <User size={16} /> },
-    { name: 'Academic Year', icon: <Calendar size={16} /> },
-    { name: 'Notifications', icon: <Bell size={16} /> },
-    { name: 'Security', icon: <ShieldCheck size={16} /> },
+    { id: 'General', label: 'General Framework', icon: <User size={16} /> },
+    { id: 'Academic', label: 'Academic Term', icon: <Calendar size={16} /> }
   ];
 
   return (
     <div className="space-y-6 text-[#7D1924]">
       <div>
         <h2 className="text-3xl font-extrabold tracking-tight text-[#7D1924]">Settings</h2>
-        <p className="text-xs text-slate-400 font-medium uppercase mt-1 tracking-wider">
-          Configure system environment variables and preferences.
+        <p className="text-xs text-slate-400 font-semibold uppercase mt-1 tracking-wider">
+          Configure runtime environment variables and core database preferences.
         </p>
       </div>
 
       <div className="flex flex-col md:flex-row gap-6 items-start">
+        {/* Minimal Nav Toolbar Selection Strip */}
         <nav className="w-full md:w-56 flex flex-col gap-1 shrink-0">
           {subNavItems.map((item) => {
-            const isSubActive = activeSubTab === item.name;
+            const isSubActive = activeSubTab === item.id;
             return (
               <button
-                key={item.name}
-                onClick={() => setActiveSubTab(item.name)}
-                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-bold uppercase tracking-wider transition-all duration-200
+                key={item.id}
+                onClick={() => { setActiveSubTab(item.id); setSaveSuccess(false); }}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-bold uppercase tracking-wider transition-all duration-150 cursor-pointer
                   ${isSubActive 
-                    ? 'bg-[#7D1924] text-white shadow-md' 
+                    ? 'bg-[#7D1924] text-white shadow-sm' 
                     : 'text-slate-500 hover:bg-slate-100 hover:text-[#7D1924]'
                   }`}
               >
                 {item.icon}
-                {item.name}
+                {item.label}
               </button>
             );
           })}
         </nav>
 
+        {/* Primary Functional Area Workspace Panel */}
         <div className="flex-1 w-full space-y-6">
+          
+          {/* --- VIEW: GENERAL BLOCK CONFIG --- */}
           {activeSubTab === 'General' && (
             <>
-              <div className="bg-white rounded-3xl border border-slate-200/80 p-6 shadow-sm space-y-5 relative">
-                <div>
-                  <h3 className="text-base font-black text-slate-900 tracking-tight">General Information</h3>
-                </div>
-
-                {isLoadingGeneral ? (
-                  <LoadingState label="Loading general settings..." className="py-8" />
-                ) : (
-                <form onSubmit={handleSaveGeneral} className="space-y-4 text-xs font-bold text-slate-500 uppercase tracking-wider">
+              <div className="bg-white rounded-3xl border border-slate-200/60 p-6 shadow-xs text-left space-y-5">
+                <h3 className="text-sm font-black text-slate-900 uppercase tracking-wide">Institutional Architecture Identifiers</h3>
+                
+                <form 
+                  onSubmit={(e) => handleFormSubmit(e, systemService.updateGeneralSettings, generalInfo)} 
+                  className="space-y-4 text-xs font-bold text-slate-500 uppercase tracking-wider"
+                >
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                     <div className="sm:col-span-2 space-y-2">
-                      <label className="text-slate-400">University Name</label>
+                      <label className="text-slate-400 font-semibold text-[10px]">University Institutional Wordmark</label>
                       <input 
                         type="text"
                         name="universityName"
                         value={generalInfo.universityName}
-                        onChange={handleGeneralChange}
-                        className="w-full text-sm border border-slate-200 bg-slate-50 p-3.5 rounded-xl text-slate-800 font-bold focus:outline-none focus:ring-2 focus:ring-[#375534]/20 focus:bg-white transition-all"
+                        onChange={(e) => handleInputChange(e, setGeneralInfo)}
+                        className="w-full text-sm font-bold border border-slate-200 bg-slate-50/50 p-3 rounded-xl text-slate-800 focus:outline-none focus:bg-white focus:ring-1 focus:ring-slate-200 transition-all normal-case"
+                        required
                       />
                     </div>
                     <div className="space-y-2">
-                      <label className="text-slate-400">Short Name</label>
+                      <label className="text-slate-400 font-semibold text-[10px]">Short Codename</label>
                       <input 
                         type="text"
                         name="shortName"
                         value={generalInfo.shortName}
-                        onChange={handleGeneralChange}
-                        className="w-full text-sm border border-slate-200 bg-slate-50 p-3.5 rounded-xl text-slate-800 font-bold focus:outline-none focus:ring-2 focus:ring-[#375534]/20 focus:bg-white transition-all"
+                        onChange={(e) => handleInputChange(e, setGeneralInfo)}
+                        className="w-full text-sm font-bold border border-slate-200 bg-slate-50/50 p-3 rounded-xl text-slate-800 text-center focus:outline-none focus:bg-white focus:ring-1 focus:ring-slate-200 transition-all"
+                        required
                       />
                     </div>
                   </div>
 
                   <div className="space-y-2">
-                    <label className="text-slate-400">Contact Email</label>
+                    <label className="text-slate-400 font-semibold text-[10px]">Primary Contact Hub Inbound Email</label>
                     <input 
                       type="email"
                       name="contactEmail"
                       value={generalInfo.contactEmail}
-                      onChange={handleGeneralChange}
-                      className="w-full text-sm border border-slate-200 bg-slate-50 p-3.5 rounded-xl text-slate-800 font-bold focus:outline-none focus:ring-2 focus:ring-[#375534]/20 focus:bg-white transition-all lowercase"
+                      onChange={(e) => handleInputChange(e, setGeneralInfo)}
+                      className="w-full text-sm font-bold border border-slate-200 bg-slate-50/50 p-3 rounded-xl text-slate-800 focus:outline-none focus:bg-white focus:ring-1 focus:ring-slate-200 transition-all lowercase"
+                      required
                     />
                   </div>
 
-                  <div className="flex justify-between items-center pt-2">
+                  <div className="flex justify-between items-center pt-2 border-t border-slate-50">
                     <div className="w-2/3">
-                      {saveSuccessGeneral && (
-                        <div className="flex items-center gap-2 text-emerald-700 font-black normal-case text-xs animate-in fade-in duration-200">
-                          <CheckCircle2 size={16} className="stroke-[2.5]" /> Changes saved successfully.
+                      {saveSuccess && (
+                        <div className="flex items-center gap-2 text-emerald-600 font-black normal-case text-xs animate-in fade-in duration-200">
+                          <CheckCircle2 size={15} className="stroke-[2.5]" /> General framework options mapped successfully.
                         </div>
                       )}
                     </div>
                     <button
                       type="submit"
-                      disabled={isSavingGeneral}
-                      className="flex items-center gap-2 bg-[#7D1924] text-[#FCEEEF] text-xs font-black uppercase tracking-widest px-6 py-3.5 rounded-2xl hover:bg-[#962230] transition-all shadow-sm active:scale-[0.98] disabled:opacity-50"
+                      disabled={isSaving}
+                      className="flex items-center gap-2 bg-[#7D1924] hover:bg-[#60121a] text-white text-xs font-black px-5 py-3 rounded-xl shadow-2xs transition-all active:scale-[0.98] disabled:opacity-50 cursor-pointer"
                     >
-                      {isSavingGeneral ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />} Save Changes
+                      {isSaving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />} 
+                      <span>Save Framework Changes</span>
                     </button>
                   </div>
                 </form>
-                )}
               </div>
 
-              <div className="bg-white rounded-3xl border border-slate-200/80 p-6 shadow-sm space-y-6">
-                <div>
-                  <h3 className="text-base font-black text-slate-900 tracking-tight">Display Settings</h3>
-                </div>
-
-                <div className="divide-y divide-slate-100 text-xs font-bold">
+              {/* Display Table Control Options */}
+              <div className="bg-white rounded-3xl border border-slate-200/60 p-6 shadow-xs text-left space-y-5">
+                <h3 className="text-sm font-black text-slate-900 uppercase tracking-wide">Interface Experience Configuration</h3>
+                
+                <div className="divide-y divide-slate-100 text-xs font-bold text-slate-700">
                   <div className="flex justify-between items-center pb-4">
                     <div className="space-y-0.5 max-w-[80%]">
-                      <p className="text-sm font-bold text-slate-800 tracking-tight">Compact Table View</p>
-                      <p className="text-slate-400 font-medium">Show more rows per page in data tables.</p>
+                      <p className="text-sm font-bold text-slate-800 tracking-tight">Compact Table Row Sizing</p>
+                      <p className="text-slate-400 text-[11px] font-medium normal-case">Densely render cell margins inside evaluation sheets to display maximum student data metrics.</p>
                     </div>
                     <button 
-                      onClick={() => handleToggle('compactTable')}
-                      className={`w-11 h-6 rounded-full transition-colors duration-200 relative focus:outline-none shrink-0
-                        ${displaySettings.compactTable ? 'bg-[#7D1924]' : 'bg-slate-200'}`}
+                      type="button"
+                      onClick={() => handleDisplayToggle('compactTable')}
+                      className={`w-11 h-6 rounded-full transition-colors relative outline-none shrink-0 cursor-pointer ${displaySettings.compactTable ? 'bg-[#7D1924]' : 'bg-slate-200'}`}
                     >
-                      <div className={`w-4 h-4 bg-white rounded-full absolute top-1 transition-transform duration-200
-                        ${displaySettings.compactTable ? 'right-1' : 'left-1'}`} 
-                      />
+                      <div className={`w-4 h-4 bg-white rounded-full absolute top-1 transition-all ${displaySettings.compactTable ? 'right-1' : 'left-1'}`} />
                     </button>
                   </div>
 
                   <div className="flex justify-between items-center pt-4">
                     <div className="space-y-0.5 max-w-[80%]">
-                      <p className="text-sm font-bold text-slate-800 tracking-tight">Show Activity Feed</p>
-                      <p className="text-slate-400 font-medium">Display the live activity feed on the dashboard.</p>
+                      <p className="text-sm font-bold text-slate-800 tracking-tight">Dashboard Activity Logging Feed</p>
+                      <p className="text-slate-400 text-[11px] font-medium normal-case">Stream and process dynamic user mutation parameters live on the admin overview panel.</p>
                     </div>
                     <button 
-                      onClick={() => handleToggle('showActivityFeed')}
-                      className={`w-11 h-6 rounded-full transition-colors duration-200 relative focus:outline-none shrink-0
-                        ${displaySettings.showActivityFeed ? 'bg-[#7D1924]' : 'bg-slate-200'}`}
+                      type="button"
+                      onClick={() => handleDisplayToggle('showActivityFeed')}
+                      className={`w-11 h-6 rounded-full transition-colors relative outline-none shrink-0 cursor-pointer ${displaySettings.showActivityFeed ? 'bg-[#7D1924]' : 'bg-slate-200'}`}
                     >
-                      <div className={`w-4 h-4 bg-white rounded-full absolute top-1 transition-transform duration-200
-                        ${displaySettings.showActivityFeed ? 'right-1' : 'left-1'}`} 
-                      />
+                      <div className={`w-4 h-4 bg-white rounded-full absolute top-1 transition-all ${displaySettings.showActivityFeed ? 'right-1' : 'left-1'}`} />
                     </button>
                   </div>
                 </div>
@@ -287,77 +247,64 @@ export default function AdminSettingsPage() {
             </>
           )}
 
-          {activeSubTab === 'Academic Year' && (
-            <div className="bg-white rounded-3xl border border-slate-200/80 p-6 shadow-sm space-y-4">
-              <h3 className="text-base font-black text-slate-900 tracking-tight">Academic Year & Term Configuration</h3>
-              <p className="text-xs text-slate-500 mb-2">Controls the term filtering logic system-wide (e.g., eligible subject assignment scopes).</p>
-              
-              {isLoadingAcademic ? (
-                <LoadingState label="Loading live configuration..." className="py-8" />
-              ) : (
-                <form onSubmit={handleSaveAcademicConfig} className="space-y-4 max-w-sm text-xs font-bold text-slate-500 uppercase tracking-wider">
-                  <div className="space-y-1.5">
-                    <label className="text-slate-400">Target Academic Scope (A.Y.)</label>
-                    <input 
-                      type="text" 
-                      value={academicConfig.activeYear}
-                      onChange={(e) => setAcademicConfig(prev => ({ ...prev, activeYear: e.target.value }))}
-                      className="w-full text-sm border border-slate-200 bg-slate-50 p-3 rounded-xl text-slate-800 font-bold focus:outline-none focus:ring-2 focus:ring-[#375534]/20"
-                      placeholder="e.g. 2026-2027"
-                      required
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-slate-400">Current Active Semester</label>
-                    <select 
-                      value={academicConfig.activeSemester}
-                      onChange={(e) => setAcademicConfig(prev => ({ ...prev, activeSemester: e.target.value }))}
-                      className="w-full text-sm border border-slate-200 bg-slate-50 p-3 rounded-xl text-slate-800 font-bold focus:outline-none focus:ring-2 focus:ring-[#375534]/20"
-                    >
-                      <option value="1st Semester">1st Semester</option>
-                      <option value="2nd Semester">2nd Semester</option>
-                      <option value="Summer Term">Summer Term</option>
-                    </select>
-                  </div>
-                  
-                  <div className="flex items-center gap-4 mt-4">
-                    <button 
-                      type="submit"
-                      disabled={isSavingAcademic}
-                      className="flex items-center justify-center gap-2 bg-[#7D1924] text-[#FCEEEF] text-[11px] px-5 py-3 rounded-xl uppercase tracking-wider hover:bg-[#962230] transition-colors disabled:opacity-50"
-                    >
-                      {isSavingAcademic ? <Loader2 size={14} className="animate-spin" /> : 'Save Academic Framework'}
-                    </button>
-                    {saveSuccessAcademic && (
-                        <div className="flex items-center gap-1.5 text-emerald-700 font-black normal-case text-xs animate-in fade-in duration-200">
-                          <CheckCircle2 size={16} className="stroke-[2.5]" /> Saved
-                        </div>
-                    )}
-                  </div>
-                </form>
-              )}
+          {/* --- VIEW: ACADEMIC CALENDAR MODEL GATING --- */}
+          {activeSubTab === 'Academic' && (
+            <div className="bg-white rounded-3xl border border-slate-200/60 p-6 shadow-xs text-left space-y-4">
+              <div>
+                <h3 className="text-sm font-black text-slate-900 uppercase tracking-wide">Academic Year Lifecycle Bounds</h3>
+                <p className="text-slate-400 text-[11px] font-medium mt-0.5 normal-case">Controls scheduling checks, prerequisites evaluations, and system fallback limits campus-wide.</p>
+              </div>
+
+              <form 
+                onSubmit={(e) => handleFormSubmit(e, systemService.updateAcademicConfig, academicConfig)} 
+                className="space-y-4 max-w-sm text-xs font-bold text-slate-500 uppercase tracking-wider pt-2"
+              >
+                <div className="space-y-1.5">
+                  <label className="text-slate-400 font-semibold text-[10px]">Active Academic Term Scope (A.Y.)</label>
+                  <input 
+                    type="text"
+                    name="activeYear"
+                    value={academicConfig.activeYear}
+                    onChange={(e) => handleInputChange(e, setAcademicConfig)}
+                    className="w-full text-sm font-bold border border-slate-200 bg-slate-50/50 p-3 rounded-xl text-slate-800 focus:outline-none focus:bg-white focus:ring-1 focus:ring-slate-200 transition-all"
+                    placeholder="e.g. 2026-2027"
+                    required
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-slate-400 font-semibold text-[10px]">Active Operational Term Semester</label>
+                  <select 
+                    name="activeSemester"
+                    value={academicConfig.activeSemester}
+                    onChange={(e) => handleInputChange(e, setAcademicConfig)}
+                    className="w-full text-sm font-bold border border-slate-200 bg-slate-50/50 p-3 rounded-xl text-slate-800 focus:outline-none focus:bg-white focus:ring-1 focus:ring-slate-200 transition-all cursor-pointer"
+                  >
+                    <option value="1st Semester">1st Semester</option>
+                    <option value="2nd Semester">2nd Semester</option>
+                    <option value="Summer Term">Summer Term</option>
+                  </select>
+                </div>
+                
+                <div className="flex items-center gap-4 pt-2">
+                  <button 
+                    type="submit"
+                    disabled={isSaving}
+                    className="flex items-center justify-center gap-2 bg-[#7D1924] hover:bg-[#60121a] text-white text-xs font-black px-5 py-3 rounded-xl shadow-2xs transition-all active:scale-[0.98] disabled:opacity-50 cursor-pointer"
+                  >
+                    {isSaving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />} 
+                    <span>Commit Academic Framework</span>
+                  </button>
+                  {saveSuccess && (
+                    <div className="flex items-center gap-1.5 text-emerald-600 font-black normal-case text-xs animate-in fade-in duration-200">
+                      <CheckCircle2 size={15} className="stroke-[2.5]" /> Configurations Persisted
+                    </div>
+                  )}
+                </div>
+              </form>
             </div>
           )}
 
-          {activeSubTab === 'Notifications' && (
-            <div className="bg-white rounded-3xl border border-slate-200/80 p-6 shadow-sm">
-              <h3 className="text-base font-black text-slate-900 tracking-tight">Notification Channels</h3>
-              <p className="text-xs text-slate-400 font-medium mt-1">Manage institutional email routing and system webhook despatches.</p>
-              <div className="mt-4 p-4 border border-dashed border-slate-200 rounded-2xl bg-slate-50 text-center text-xs font-bold uppercase text-slate-400 tracking-wider">
-                Alert dispatcher profiles are functioning.
-              </div>
-            </div>
-          )}
-
-          {activeSubTab === 'Security' && (
-            <div className="bg-white rounded-3xl border border-slate-200/80 p-6 shadow-sm">
-              <h3 className="text-base font-black text-slate-900 tracking-tight">Security & Governance</h3>
-              <p className="text-xs text-slate-400 font-medium mt-1">Configure administrator key rotations and access criteria validation protocols.</p>
-              <div className="mt-4 p-4 border border-dashed border-slate-200 rounded-2xl bg-slate-50 text-center text-xs font-bold uppercase text-slate-400 tracking-wider">
-                Cryptographic signature scopes are locked.
-              </div>
-            </div>
-          )}
         </div>
       </div>
     </div>

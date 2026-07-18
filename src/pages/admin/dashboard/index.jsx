@@ -1,331 +1,237 @@
 import { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { 
-  Users, BookOpen, ClipboardCheck,
-  PlusCircle, CheckCircle2, FileSpreadsheet, UserCheck
+  Users, ClipboardCheck, GraduationCap, ArrowUpRight, 
+  Layers, Activity, Calendar, ShieldCheck 
 } from 'lucide-react';
 import { studentService } from '../../../services/studentService';
-import { subjectService } from '../../../services/subjectService';
 import { evaluationService } from '../../../services/evaluationService';
 import { systemService } from '../../../services/systemService';
-import { Link } from 'react-router-dom';
 import LoadingState from '../../../components/LoadingState';
-import { useSystemSettings } from '../../../hooks/useSystemSettings';
 
-export default function AdminDashboardPage() {
-  const { showActivityFeed } = useSystemSettings();
+export default function AdminDashboardView() {
   const [loading, setLoading] = useState(true);
-  
-  const [stats, setStats] = useState({
+  const [academicConfig, setAcademicConfig] = useState({ activeYear: '2026-2027', activeSemester: '1st Semester' }); //[cite: 1]
+  const [metrics, setMetrics] = useState({
     totalStudents: 0,
-    totalSubjects: 0,
-    pendingEvaluations: 0,
-    completedEvaluations: 0,
+    totalEvaluations: 0,
+    graduatingCount: 0,
+    irregularCount: 0
   });
-
-  const [academicTerm, setAcademicTerm] = useState({
-    activeYear: 'Loading...',
-    activeSemester: 'Loading...'
-  });
-
-  const [courseAssignments, setCourseAssignments] = useState([]);
-  const [completionMetrics, setCompletionMetrics] = useState({
-    clearedSequences: 0,
-    incompleteSequences: 0,
-    pendingAudits: 0,
-    totalEvaluationsMapped: 0
-  });
-
-  const [recentAssignments, setRecentAssignments] = useState([]);
-  const [activityFeed, setActivityFeed] = useState([]);
+  const [recentStudents, setRecentStudents] = useState([]);
 
   useEffect(() => {
-    const fetchDashboardData = async () => {
+    const fetchDashboardMetrics = async () => {
       try {
         setLoading(true);
-        // Fetch all data in parallel including global academic config
-        const [students, subjects, evaluations, config] = await Promise.all([
-          studentService.getAllStudents(),
-          subjectService.getAllSubjects(),
-          evaluationService.getAllEvaluations(),
-          systemService.getAcademicConfig()
+        const [studentsList, evaluationsList, config] = await Promise.all([
+          studentService.getAllStudents(), //[cite: 1]
+          evaluationService.getAllEvaluations(), //[cite: 1]
+          systemService.getAcademicConfig() //[cite: 1]
         ]);
 
         if (config) {
-          setAcademicTerm(config);
+          setAcademicConfig(config); //[cite: 1]
         }
 
-        // 1. Calculate Stats
-        const pendingEvals = evaluations.filter(e => ['Assigned', 'Pending Pre-req', 'Pending'].includes(e.status));
-        const completedEvals = evaluations.filter(e => ['Passed', 'Excellent', 'Completed'].includes(e.status));
-        
-        setStats({
-          totalStudents: students.length,
-          totalSubjects: subjects.length,
-          pendingEvaluations: pendingEvals.length,
-          completedEvaluations: completedEvals.length,
+        // Compute administrative analytics loops
+        let graduating = 0;
+        let irregular = 0;
+        studentsList.forEach(s => {
+          if (s.status === 'Graduating Candidate' || String(s.yearLevel).toLowerCase().includes('fourth')) graduating++; //[cite: 1]
+          if (s.classification === 'irregular') irregular++; //[cite: 1]
         });
 
-        // 2. Course Assignments Distribution
-        const programCounts = {};
-        students.forEach(s => {
-          const prog = s.program || s.course || 'Unassigned';
-          programCounts[prog] = (programCounts[prog] || 0) + 1;
-        });
-        
-        const assignmentsData = Object.entries(programCounts).map(([course, count]) => ({
-          course,
-          assignedCount: count,
-          percentage: students.length ? Math.round((count / students.length) * 100) : 0
-        })).sort((a, b) => b.assignedCount - a.assignedCount).slice(0, 4); // Top 4 programs
-        setCourseAssignments(assignmentsData);
-
-        // 3. Completion Metrics
-        setCompletionMetrics({
-          clearedSequences: completedEvals.length,
-          incompleteSequences: evaluations.filter(e => e.status === 'Failed').length,
-          pendingAudits: pendingEvals.length,
-          totalEvaluationsMapped: evaluations.length
+        setMetrics({
+          totalStudents: studentsList.length, //[cite: 1]
+          totalEvaluations: evaluationsList.length, //[cite: 1]
+          graduatingCount: graduating, //[cite: 1]
+          irregularCount: irregular
         });
 
-        // 4. Recent Assignments Table
-        const recent = evaluations
-          .sort((a, b) => new Date(b.assignedDate || 0) - new Date(a.assignedDate || 0))
-          .slice(0, 5)
-          .map((ev, index) => {
-            const student = students.find(s => s.id === ev.studentId);
-            return {
-              id: ev.id || index,
-              student: student ? student.name : ev.studentId,
-              subject: ev.subjectCode,
-              status: ev.status === 'Passed' ? 'completed' : ev.status === 'Assigned' ? 'assigned' : 'pending',
-              date: ev.assignedDate ? new Date(ev.assignedDate).toLocaleDateString() : 'N/A'
-            };
-          });
-        setRecentAssignments(recent);
-
-        // 5. Activity Feed (Mocked dynamically based on recent evaluations)
-        const recentActivities = recent.map((r, i) => ({
-          id: i,
-          text: `Administrator updated evaluation for ${r.student} (${r.subject})`,
-          time: r.date
-        }));
-        setActivityFeed(recentActivities.length ? recentActivities : [{ id: 1, text: 'No recent activity.', time: '' }]);
+        // Slice latest 5 active student rows for summary display
+        setRecentStudents(studentsList.slice(-5).reverse());
 
       } catch (error) {
-        console.error("Dashboard data load failed:", error);
+        console.error("Failed loading administrative workbench metrics:", error);
       } finally {
         setLoading(false);
       }
     };
 
-    fetchDashboardData();
+    fetchDashboardMetrics();
   }, []);
 
   if (loading) {
-    return (
-      <LoadingState label="Loading Console Metrics..." accent="#375534" />
-    );
+    return <LoadingState label="Compiling Institutional Roster Metrics..." />; //[cite: 1]
   }
 
   return (
-    <div className="space-y-6 text-[#0F2A1D]">
-       {/* Top Title Head */}
-      <div>
-        <h2 className="text-3xl font-extrabold tracking-tight text-[#0F2A1D]">Dashboard</h2>
-      </div>
-
-      {/* Formal Welcome Banner */}
-      <div className="bg-[#7D1924] text-[#962230] rounded-3xl p-8 flex flex-col md:flex-row justify-between items-start md:items-center shadow-lg border border-white/10 relative overflow-hidden">
-        <div className="space-y-1 z-10">
-          <h2 className="text-3xl font-bold tracking-tight text-white">
-            Welcome back, Administrator
-          </h2>
-          <p className="text-[#AEC3B0] text-sm font-medium">
-            Here's an overview of today's academic activities, curricular tracking, and evaluations.
+    <div className="space-y-6 text-slate-800 font-sans antialiased text-left max-w-7xl mx-auto">
+      {/* Upper Strategy Identification Header */}
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-slate-200 pb-5">
+        <div>
+          <div className="flex items-center gap-2 text-xs font-black tracking-widest text-[#7D1924] uppercase">
+            <Activity size={14} className="stroke-[2.5]" />
+            <span>Operational Summary Control</span>
+          </div>
+          <h1 className="text-3xl font-black text-slate-900 tracking-tight mt-1">
+            Portal Control Center
+          </h1>
+          <p className="text-slate-500 text-xs font-medium mt-0.5">
+            Institutional quality evaluations dashboard core workspace framework.
           </p>
         </div>
-        
-        <div className="mt-4 md:mt-0 bg-[#375534]/40 backdrop-blur-md p-4 rounded-2xl border border-white/10 text-left md:text-right z-10 min-w-[220px]">
-          <p className="font-bold text-base text-white tracking-wide">{new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
-          <div className="flex gap-2 mt-2 text-[10px] font-black tracking-wider justify-start md:justify-end uppercase">
-            <span className="bg-[#7D1924] text-[#FCEEEF] px-2.5 py-1 rounded-lg border border-white/5">A.Y. {academicTerm.activeYear}</span>
-            <span className="bg-[#7D1924] text-[#FCEEEF] px-2.5 py-1 rounded-lg border border-white/5">{academicTerm.activeSemester}</span>
+
+        {/* Global Academic Target Lock Status */}
+        <div className="flex items-center gap-3 bg-white border border-slate-200/80 p-3 rounded-xl shadow-2xs">
+          <div className="p-2 bg-[#f4f7f3] text-[#375534] rounded-lg"><Calendar size={16} /></div> {/*[cite: 1] */}
+          <div className="text-xs">
+            <p className="font-black text-slate-400 uppercase tracking-wider text-[9px] leading-none">Active Matrix Scope</p>
+            <p className="font-extrabold text-slate-900 mt-1 font-mono">{academicConfig.activeYear} • {academicConfig.activeSemester}</p> {/*[cite: 1] */}
           </div>
         </div>
       </div>
 
-      {/* Metrics Row Blocks */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-        <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-200/80 flex flex-col justify-between transition-all duration-300 hover:shadow-md">
-          <div className="flex justify-between items-start">
-            <div className="p-3 bg-blue-50 text-blue-600 rounded-2xl"><Users size={22} /></div>
+      {/* Main KPI Statistical Card Grid */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        {[
+          { title: "Enrolled Registry", value: metrics.totalStudents, label: "Total Students Mapped", color: "text-blue-600", icon: <Users size={20} /> }, //[cite: 1]
+          { title: "Evaluations Logged", value: metrics.totalEvaluations, label: "Pipeline Operations", color: "text-emerald-600", icon: <ClipboardCheck size={20} /> }, //[cite: 1]
+          { title: "Grad Candidates", value: metrics.graduatingCount, label: "Checklist Clear Hold", color: "text-amber-600", icon: <GraduationCap size={20} />, highlight: true }, //[cite: 1]
+          { title: "Irregular Tracking", value: metrics.irregularCount, label: "Program Path Shifts", color: "text-indigo-600", icon: <Layers size={20} /> }
+        ].map((card, idx) => (
+          <div 
+            key={idx} 
+            className={`p-5 rounded-2xl border transition-all duration-200 shadow-2xs ${
+              card.highlight 
+                ? 'bg-gradient-to-br from-[#7D1924] to-[#5a1018] border-transparent text-white hover:scale-[1.01]' 
+                : 'bg-white border-slate-200/60 hover:border-slate-300'
+            }`}
+          >
+            <div className="flex justify-between items-start">
+              <span className={`text-[10px] font-black uppercase tracking-wider ${card.highlight ? 'text-rose-200' : 'text-slate-400'}`}>
+                {card.title}
+              </span>
+              <div className={`p-2 rounded-xl shrink-0 ${card.highlight ? 'bg-white/10 text-white' : 'bg-slate-50 text-slate-500'}`}>
+                {card.icon}
+              </div>
+            </div>
+            <div className="mt-2">
+              <h3 className={`text-3xl font-black tracking-tight ${card.highlight ? 'text-white' : 'text-slate-900'}`}>
+                {card.value}
+              </h3>
+              <p className={`text-[10px] font-bold mt-1 ${card.highlight ? 'text-rose-200/70' : 'text-slate-400/80'}`}>
+                {card.label}
+              </p>
+            </div>
           </div>
-          <div className="mt-6">
-            <span className="text-4xl font-black text-slate-900 tracking-tight">{stats.totalStudents}</span>
-            <p className="text-xs font-bold text-slate-400 mt-1 tracking-wider uppercase">Total Students</p>
-          </div>
-        </div>
-
-        <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-200/80 flex flex-col justify-between transition-all duration-300 hover:shadow-md">
-          <div className="flex justify-between items-start">
-            <div className="p-3 bg-purple-50 text-purple-600 rounded-2xl"><BookOpen size={22} /></div>
-          </div>
-          <div className="mt-6">
-            <span className="text-4xl font-black text-slate-900 tracking-tight">{stats.totalSubjects}</span>
-            <p className="text-xs font-bold text-slate-400 mt-1 tracking-wider uppercase">Total Subjects</p>
-          </div>
-        </div>
-
-        <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-200/80 flex flex-col justify-between transition-all duration-300 hover:shadow-md">
-          <div className="flex justify-between items-start">
-            <div className="p-3 bg-amber-50 text-amber-500 rounded-2xl"><ClipboardCheck size={22} /></div>
-          </div>
-          <div className="mt-6">
-            <span className="text-4xl font-black text-slate-900 tracking-tight">{stats.pendingEvaluations}</span>
-            <p className="text-xs font-bold text-slate-400 mt-1 tracking-wider uppercase">Pending Evaluations</p>
-          </div>
-        </div>
-
-        <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-200/80 flex flex-col justify-between transition-all duration-300 hover:shadow-md">
-          <div className="flex justify-between items-start">
-            <div className="p-3 bg-emerald-50 text-emerald-600 rounded-2xl"><CheckCircle2 size={22} /></div>
-          </div>
-          <div className="mt-6">
-            <span className="text-4xl font-black text-slate-900 tracking-tight">{stats.completedEvaluations}</span>
-            <p className="text-xs font-bold text-slate-400 mt-1 tracking-wider uppercase">Completed Evaluations</p>
-          </div>
-        </div>
+        ))}
       </div>
 
-      {/* Main Structural Row Section */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 bg-white rounded-3xl p-6 border border-slate-200/80 shadow-sm flex flex-col justify-between space-y-4">
-          <div className="flex justify-between items-center">
-            <h3 className="text-xs font-black text-slate-900 uppercase tracking-wider">Recent Assignments</h3>
-            <Link to="/admin/evaluation" className="text-xs font-bold text-[#375534] hover:underline">View All</Link>
+      {/* Split Workbench Main Row Section */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+        {/* Left Column: Recent Student Ingress Records */}
+        <div className="lg:col-span-2 bg-white rounded-2xl border border-slate-200/60 p-5 shadow-2xs space-y-4">
+          <div className="flex justify-between items-center border-b pb-3">
+            <div>
+              <h3 className="text-sm font-black text-slate-900 tracking-tight uppercase">Recent Admissions Registry</h3>
+              <p className="text-[11px] text-slate-400 font-medium">Latest incoming student entries requiring verification checksheets.</p>
+            </div>
+            <Link 
+              to="/admin/students" 
+              className="text-xs font-bold text-[#7D1924] hover:text-rose-700 flex items-center gap-1 transition-colors"
+            >
+              <span>Directory Workbench</span>
+              <ArrowUpRight size={14} />
+            </Link>
           </div>
-          
-          <div className="overflow-x-auto w-full">
-            <table className="w-full text-left border-collapse">
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs border-collapse">
               <thead>
-                <tr className="border-b border-slate-100 text-[10px] font-black text-slate-400 uppercase tracking-wider">
-                  <th className="pb-3">Student</th>
-                  <th className="pb-3">Subject</th>
-                  <th className="pb-3">Status</th>
-                  <th className="pb-3 text-right">Date</th>
+                <tr className="border-b text-slate-400 font-bold uppercase tracking-wider text-[10px] bg-slate-50/40">
+                  <th className="p-3 pl-4">Student Identity</th>
+                  <th className="p-3">Placement</th>
+                  <th className="p-3">Curriculum version</th>
+                  <th className="p-3 pr-4 text-right">Action status</th>
                 </tr>
               </thead>
-              <tbody className="text-xs font-semibold text-slate-700 divide-y divide-slate-50">
-                {recentAssignments.map((assignment) => (
-                  <tr key={assignment.id} className="hover:bg-slate-50/50 transition-colors">
-                    <td className="py-3 font-bold text-slate-900">{assignment.student}</td>
-                    <td className="py-3 text-slate-600">{assignment.subject}</td>
-                    <td className="py-3">
-                      <span className={`px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider text-white
-                        ${assignment.status === 'completed' ? 'bg-[#375534]' : 
-                          assignment.status === 'assigned' ? 'bg-blue-600' : 'bg-amber-500'}`}
-                      >
-                        {assignment.status}
+              <tbody className="divide-y font-semibold text-slate-600">
+                {recentStudents.map((student) => (
+                  <tr key={student.id} className="hover:bg-slate-50/40 transition-colors">
+                    <td className="p-3 pl-4 font-black text-slate-900">
+                      {student.lastName}, {student.firstName} {/*[cite: 1] */}
+                      <span className="block font-mono text-[10px] text-slate-400 font-bold mt-0.5">{student.studentId}</span> {/*[cite: 1] */}
+                    </td>
+                    <td className="p-3 text-slate-500">
+                      {student.course} • {student.yearLevel} {/*[cite: 1] */}
+                    </td>
+                    <td className="p-3">
+                      <span className="text-[9px] font-extrabold font-mono bg-slate-100 px-2 py-0.5 border rounded text-slate-600">
+                        {student.curriculum || 'NEW'} PLAN {/*[cite: 1] */}
                       </span>
                     </td>
-                    <td className="py-3 text-slate-400 text-right font-mono">{assignment.date}</td>
+                    <td className="p-3 pr-4 text-right">
+                      <span className="text-[9px] font-black tracking-wide uppercase px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-100">
+                        {student.status || 'Active'} {/*[cite: 1] */}
+                      </span>
+                    </td>
                   </tr>
                 ))}
-                {recentAssignments.length === 0 && (
-                   <tr>
-                    <td colSpan="4" className="py-6 text-center text-slate-400">No recent assignments found.</td>
-                   </tr>
-                )}
               </tbody>
             </table>
           </div>
         </div>
 
-        <div className="bg-white rounded-3xl p-6 border border-slate-200/80 shadow-sm space-y-4">
-          <h3 className="text-xs font-black text-slate-900 uppercase tracking-wider">Quick Actions</h3>
-          <div className="grid grid-cols-2 gap-3 text-center h-full">
-            <Link to="/admin/students" className="p-4 bg-slate-50 hover:bg-[#FCEEEF]/30 hover:border-[#7A1C2C]/40 border border-slate-200/60 rounded-2xl flex flex-col items-center justify-center gap-2 group transition-all">
-              <PlusCircle size={20} className="text-[#375534] group-hover:scale-105 transition-transform" />
-              <span className="text-[10px] font-black text-slate-700 tracking-wide uppercase">Assign Subject</span>
-            </Link>
-            <Link to="/admin/evaluation" className="p-4 bg-slate-50 hover:bg-[#FCEEEF]/30 hover:border-[#7A1C2C]/40 border border-slate-200/60 rounded-2xl flex flex-col items-center justify-center gap-2 group transition-all">
-              <UserCheck size={20} className="text-amber-600 group-hover:scale-105 transition-transform" />
-              <span className="text-[10px] font-black text-slate-700 tracking-wide uppercase">Evaluate Student</span>
-            </Link>
-            <Link to="/admin/reports" className="p-4 bg-slate-50 hover:bg-[#FCEEEF]/30 hover:border-[#7A1C2C]/40 border border-slate-200/60 rounded-2xl flex flex-col items-center justify-center gap-2 group transition-all">
-              <FileSpreadsheet size={20} className="text-blue-600 group-hover:scale-105 transition-transform" />
-              <span className="text-[10px] font-black text-slate-700 tracking-wide uppercase">Generate Report</span>
-            </Link>
-            <Link to="/admin/students" className="p-4 bg-slate-50 hover:bg-[#FCEEEF]/30 hover:border-[#7A1C2C]/40 border border-slate-200/60 rounded-2xl flex flex-col items-center justify-center gap-2 group transition-all">
-              <Users size={20} className="text-emerald-600 group-hover:scale-105 transition-transform" />
-              <span className="text-[10px] font-black text-slate-700 tracking-wide uppercase">Manage Students</span>
-            </Link>
+        {/* Right Column: Portal Strategy Quick Access Actions */}
+        <div className="bg-white rounded-2xl border border-slate-200/60 p-5 shadow-2xs space-y-4">
+          <div>
+            <h3 className="text-sm font-black text-slate-900 tracking-tight uppercase">Module Engine Anchors</h3>
+            <p className="text-[11px] text-slate-400 font-medium">Administrative bypass controls to perform framework mutations.</p>
           </div>
-        </div>
-      </div>
 
-      {/* Analytics Feed Footer Row */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="bg-white rounded-3xl p-6 border border-slate-200/80 shadow-sm flex flex-col justify-between">
-          <h3 className="text-xs font-black text-slate-900 uppercase tracking-wider mb-4">Students by Course</h3>
-          <div className="flex-1 space-y-3.5">
-            {courseAssignments.length > 0 ? courseAssignments.map((item, idx) => (
-              <div key={idx} className="space-y-1.5">
-                <div className="flex justify-between text-xs font-bold text-slate-700">
-                  <span className="truncate max-w-[180px]">{item.course}</span>
-                  <span className="text-slate-400 font-mono">{item.assignedCount} students ({item.percentage}%)</span>
-                </div>
-                <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
-                  <div 
-                    className="bg-[#375534] h-full rounded-full transition-all duration-500" 
-                    style={{ width: `${item.percentage}%` }}
-                  />
-                </div>
+          <div className="flex flex-col gap-2 pt-2 text-xs font-bold text-slate-700">
+            <Link 
+              to="/admin/evaluation" 
+              className="p-3 bg-slate-50 hover:bg-rose-50 border hover:border-rose-100 rounded-xl flex justify-between items-center transition group"
+            >
+              <div>
+                <p className="text-slate-900 font-extrabold group-hover:text-[#7D1924] transition-colors">Launch Evaluation Pipelines</p>
+                <p className="text-[10px] text-slate-400 font-medium mt-0.5">Execute regular or legacy plan bridging checks.</p>
               </div>
-            )) : <p className="text-sm text-slate-400">No students registered yet.</p>}
+              <ArrowUpRight size={14} className="text-slate-400 group-hover:text-[#7D1924] transition-colors" />
+            </Link>
+
+            <Link 
+              to="/admin/subjects" 
+              className="p-3 bg-slate-50 hover:bg-blue-50 border hover:border-blue-100 rounded-xl flex justify-between items-center transition group"
+            >
+              <div>
+                <p className="text-slate-900 font-extrabold group-hover:text-blue-600 transition-colors">Curriculum Mapping strategy</p>
+                <p className="text-[10px] text-slate-400 font-medium mt-0.5">Edit course nodes catalog rules and exemptions.</p>
+              </div>
+              <ArrowUpRight size={14} className="text-slate-400 group-hover:text-blue-600 transition-colors" />
+            </Link>
+
+            <Link 
+              to="/admin/reports" 
+              className="p-3 bg-slate-50 hover:bg-emerald-50 border hover:border-emerald-100 rounded-xl flex justify-between items-center transition group"
+            >
+              <div>
+                <p className="text-slate-900 font-extrabold group-hover:text-emerald-600 transition-colors">Institutional Audits Console</p>
+                <p className="text-[10px] text-slate-400 font-medium mt-0.5">Generate verified transcript ledgers certificates.</p>
+              </div>
+              <ArrowUpRight size={14} className="text-slate-400 group-hover:text-emerald-600 transition-colors" />
+            </Link>
+          </div>
+
+          {/* Locked Security Notice */}
+          <div className="border border-dashed border-slate-200 p-3 rounded-xl bg-slate-50/50 flex items-center gap-2.5 text-[10px] font-medium text-slate-400 uppercase tracking-wider">
+            <ShieldCheck size={14} className="text-slate-400 shrink-0 stroke-[2.5]" />
+            <span>Cryptographic signature trail verification is active</span>
           </div>
         </div>
-
-        <div className="bg-white rounded-3xl p-6 border border-slate-200/80 shadow-sm flex flex-col justify-between">
-          <h3 className="text-xs font-black text-slate-900 uppercase tracking-wider mb-4">Evaluation Overview</h3>
-          <div className="flex-1 flex flex-col justify-center space-y-3 text-xs font-bold">
-            <div className="flex justify-between items-center p-3 bg-emerald-50/60 border border-emerald-100 rounded-xl">
-              <span className="text-emerald-800">Cleared Sequences</span>
-              <span className="font-mono text-base font-black text-emerald-900">{completionMetrics.clearedSequences}</span>
-            </div>
-            <div className="flex justify-between items-center p-3 bg-amber-50/60 border border-amber-100 rounded-xl">
-              <span className="text-amber-800">Failed / Incomplete</span>
-              <span className="font-mono text-base font-black text-amber-900">{completionMetrics.incompleteSequences}</span>
-            </div>
-            <div className="flex justify-between items-center p-3 bg-blue-50/60 border border-blue-100 rounded-xl">
-              <span className="text-blue-800">Pending Sequence Audits</span>
-              <span className="font-mono text-base font-black text-blue-900">{completionMetrics.pendingAudits}</span>
-            </div>
-            <div className="pt-1 flex justify-between text-[11px] uppercase tracking-wider text-slate-400 pl-1">
-              <span>Total Tracked Scope</span>
-              <span className="font-mono font-extrabold">{completionMetrics.totalEvaluationsMapped} Mapped</span>
-            </div>
-          </div>
-        </div>
-
-        {showActivityFeed && (
-          <div className="bg-white rounded-3xl p-6 border border-slate-200/80 shadow-sm flex flex-col justify-between space-y-4">
-            <div className="flex justify-between items-center">
-              <h3 className="text-xs font-black text-slate-900 uppercase tracking-wider">Activity Feed</h3>
-            </div>
-
-            <div className="space-y-3 max-h-[170px] overflow-y-auto pr-1 text-[11px] leading-relaxed">
-              {activityFeed.map((log) => (
-                <div key={log.id} className="flex gap-3 items-start border-l-2 border-[#375534]/30 pl-3 py-0.5">
-                  <div>
-                    <p className="text-slate-800 font-bold">{log.text}</p>
-                    <p className="text-slate-400 font-semibold font-mono mt-0.5 text-[9px]">{log.time}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
       </div>
     </div>
   );

@@ -1,15 +1,15 @@
-import React, { useState } from 'react';
-import { Sparkles, AlertTriangle, ShieldAlert, Printer, Save, Plus, Trash2, CheckCircle2 } from 'lucide-react';
+import { useState } from 'react';
+import { Calendar, AlertTriangle, ShieldAlert, Printer, Plus, Trash2, CheckCircle2, Edit2, Check, X } from 'lucide-react';
 
 const YEAR_OPTIONS = ['1st Year', '2nd Year', '3rd Year', '4th Year', '5th Year'];
 const SEMESTER_OPTIONS = ['1st Semester', '2nd Semester', 'Summer'];
-const GRADE_OPTIONS = ['1.0', '1.25', '1.5', '1.75', '2.0', '2.25', '2.5', '2.75', '3.0'];
+const GRADE_OPTIONS = ['1.0', '1.25', '1.5', '1.75', '2.0', '2.25', '2.5', '2.75', '3.0', 'In Progress'];
 const SEMESTER_CYCLE = ['1st Semester', '2nd Semester'];
 
 export default function GeneralWorkspaceView({
   auditOutput, minAllowedUnits, maxAllowedUnits, evaluationStrategy, triggerReportModalOpen, handleFinalizeEvaluationMatrix, isSubmitting,
-  catalog, studentSubjectsHistory, onAddManualSubject, onDeleteManualSubject,
-  studentYearLevel, studentSemester
+  catalog, studentSubjectsHistory, onAddManualSubject, onDeleteManualSubject, onUpdateManualSubjectGrade,
+  studentYearLevel, studentSemester, manualLoaYears, onUpdateManualLoaYears
 }) {
   const [selectedCodes, setSelectedCodes] = useState(new Set());
   const [gradesByCode, setGradesByCode] = useState({});
@@ -17,8 +17,48 @@ export default function GeneralWorkspaceView({
   const [selectedSemester, setSelectedSemester] = useState(SEMESTER_OPTIONS[0]);
   const [isAdding, setIsAdding] = useState(false);
 
+  // States for handling inline grade editing
+  const [editingCode, setEditingCode] = useState(null);
+  const [tempGrade, setTempGrade] = useState('');
+  const [isUpdating, setIsUpdating] = useState(false);
+
   if (!auditOutput) return null;
 
+  // Flags to check the evaluation context
+  const isReturnee = String(evaluationStrategy || '').toLowerCase() === 'returning';
+
+  // Inline Grade Editing handlers
+  const handleStartEdit = (subjectCode, currentGrade) => {
+    setEditingCode(subjectCode);
+    setTempGrade(currentGrade || 'In Progress');
+  };
+
+  const handleCancelEdit = () => {
+    setEditingCode(null);
+    setTempGrade('');
+  };
+
+  const handleSaveGrade = async (subjectCode) => {
+    if (!onUpdateManualSubjectGrade) {
+      setEditingCode(null);
+      return;
+    }
+    setIsUpdating(true);
+    try {
+      await onUpdateManualSubjectGrade(subjectCode, tempGrade);
+      setEditingCode(null);
+    } catch (error) {
+      console.error("Failed to save grade:", error);
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
+  const setGradeForCode = (code, val) => {
+    setGradesByCode(prev => ({ ...prev, [code]: val }));
+  };
+
+  // --- RETURN BACK THE SCHEDULE GENERATOR FOR RETURNEES ---
   const unitsRemaining = auditOutput.unitsRemaining || 0;
   const maxUnitsPerSemester = maxAllowedUnits || 21;
   const estimatedSemestersLeft = unitsRemaining > 0 ? Math.ceil(unitsRemaining / maxUnitsPerSemester) : 0;
@@ -50,7 +90,6 @@ export default function GeneralWorkspaceView({
 
     let yearIndex = Math.max(0, startYearIndex);
     let termIndex = Math.max(0, startTermIndex) % 2;
-
     let safetyGuard = 0;
     const maxIterations = remaining.length * 2 + 20;
 
@@ -99,8 +138,7 @@ export default function GeneralWorkspaceView({
       }
 
       bucketItems.forEach((c) => {
-        const code = (c.courseCode || c.code || c.id || '').toUpperCase();
-        scheduledCodes.add(code);
+        scheduledCodes.add((c.courseCode || c.code || c.id || '').toUpperCase());
       });
       const scheduledSet = new Set(bucketItems.map((c) => (c.courseCode || c.code || c.id || '').toUpperCase()));
       remaining = remaining.filter((c) => !scheduledSet.has((c.courseCode || c.code || c.id || '').toUpperCase()));
@@ -118,7 +156,6 @@ export default function GeneralWorkspaceView({
 
       advanceTerm();
     }
-
     return semesters;
   };
 
@@ -126,10 +163,6 @@ export default function GeneralWorkspaceView({
     (studentSubjectsHistory || []).map((s) => String(s.subjectCode || '').toUpperCase())
   );
 
-  // FIX: Seed the scheduler's starting year/term from the student's ACTUAL
-  // assigned standing (studentYearLevel / studentSemester props) — NOT from
-  // selectedYear/selectedSemester (those are just the filter dropdowns for
-  // browsing which subjects to add as "previously taken").
   const normalizeYearLabel = (val) => {
     const s = String(val || '').trim().toLowerCase();
     if (s.includes('1st') || s.includes('first')) return 0;
@@ -139,6 +172,7 @@ export default function GeneralWorkspaceView({
     if (s.includes('5th') || s.includes('fifth')) return 4;
     return 0;
   };
+  
   const normalizeSemesterLabel = (val) => {
     const s = String(val || '').trim().toLowerCase();
     if (s.includes('2nd') || s.includes('second')) return 1;
@@ -148,8 +182,6 @@ export default function GeneralWorkspaceView({
   const startYearIndex = normalizeYearLabel(studentYearLevel);
   const startTermIndex = normalizeSemesterLabel(studentSemester);
 
-
-
   const semesterSchedule = (catalog && catalog.length > 0)
     ? buildFullSemesterSchedule(catalog, completedCodesForSchedule, maxUnitsPerSemester, startYearIndex, startTermIndex)
     : buildSemesterSchedule(auditOutput.recommendedStudyPlan, maxUnitsPerSemester);
@@ -157,7 +189,6 @@ export default function GeneralWorkspaceView({
   const getCode = (course) => (course.courseCode || course.code || course.id || '').toUpperCase();
   const getTitle = (course) => course.courseTitle || course.title || course.id;
   const getUnits = (course) => parseInt(course.creditUnits || course.units || 3, 10);
-
   const getCourseYear = (course) => course.yearLevel || null;
   const getCourseSemesters = (course) => {
     if (Array.isArray(course.semesterOffered)) return course.semesterOffered;
@@ -175,25 +206,12 @@ export default function GeneralWorkspaceView({
     return curStart > latestStart ? cur : latest;
   }, null);
 
-  const normalizeYear = (val) => (val === null || val === undefined ? null : String(val).trim().toLowerCase());
-  const normalizeSemester = (val) => (val === null || val === undefined ? null : String(val).trim().toLowerCase());
-
-  const alreadyTakenCodes = new Set(
-    (studentSubjectsHistory || []).map(s => String(s.subjectCode || '').toUpperCase())
-  );
-
-  const targetYear = normalizeYear(selectedYear);
-  const targetSemester = normalizeSemester(selectedSemester);
-
   const availableToAdd = (catalog || []).filter((c) => {
-    if (alreadyTakenCodes.has(getCode(c))) return false;
-
-    const courseYear = normalizeYear(getCourseYear(c));
-    const courseSemesters = getCourseSemesters(c).map(normalizeSemester);
-
-    if (courseYear && targetYear && courseYear !== targetYear) return false;
-    if (courseSemesters.length > 0 && targetSemester && !courseSemesters.includes(targetSemester)) return false;
-
+    if (new Set((studentSubjectsHistory || []).map(s => String(s.subjectCode || '').toUpperCase())).has(getCode(c))) return false;
+    const courseYear = String(getCourseYear(c) || '').trim().toLowerCase();
+    const courseSemesters = getCourseSemesters(c).map(s => String(s || '').trim().toLowerCase());
+    if (courseYear && String(selectedYear || '').trim().toLowerCase() && courseYear !== String(selectedYear || '').trim().toLowerCase()) return false;
+    if (courseSemesters.length > 0 && String(selectedSemester || '').trim().toLowerCase() && !courseSemesters.includes(String(selectedSemester || '').trim().toLowerCase())) return false;
     return true;
   });
 
@@ -204,10 +222,6 @@ export default function GeneralWorkspaceView({
       else next.add(code);
       return next;
     });
-  };
-
-  const setGradeForCode = (code, grade) => {
-    setGradesByCode((prev) => ({ ...prev, [code]: grade }));
   };
 
   const toggleAllVisible = (visibleCourses) => {
@@ -242,224 +256,99 @@ export default function GeneralWorkspaceView({
           curriculumTrack: getCourseCurriculum(course),
           termSaved: `${selectedYear} - ${selectedSemester}`
         });
-    }
+      }
       setSelectedCodes(new Set());
-    setGradesByCode({});
-  } finally {
-    setIsAdding(false);
-  }
-};
+      setGradesByCode({});
+    } finally {
+      setIsAdding(false);
+    }
+  };
 
-return (
-  <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 pt-2 text-left animate-fadeIn">
-    <div className="space-y-4 lg:col-span-1">
-      <div className="bg-slate-50/60 border border-slate-200/60 p-4 rounded-2xl space-y-3.5 text-xs font-semibold">
-        <div className="flex justify-between items-center border-b border-slate-200/60 pb-2">
-          <span className="font-black text-slate-900">Curriculum Progress</span>
-          <span className="text-blue-600 font-extrabold">{auditOutput.completionPercentage}%</span>
-        </div>
-        <div className="w-full bg-slate-200 h-2 rounded-full overflow-hidden">
-          <div className="bg-blue-600 h-full transition-all duration-300" style={{ width: `${auditOutput.completionPercentage}%` }} />
-        </div>
-        <div className="space-y-1.5 pt-1 text-slate-500 text-[11px]">
-          <p className="flex justify-between"><span>Units Earned Mapped</span><span className="font-bold text-slate-900">{auditOutput.unitsEarned} Units</span></p>
-          <p className="flex justify-between"><span>Units Deficient Remaining</span><span className="font-bold text-slate-900">{auditOutput.unitsRemaining} Units</span></p>
-          <p className="flex justify-between"><span>Permitted Credit Boundary</span><span className="font-bold text-slate-900">{minAllowedUnits} – {maxAllowedUnits} Max Units</span></p>
-        </div>
-        {unitsRemaining > 0 && (
-          <div className="pt-2 mt-1 border-t border-slate-200/60 flex justify-between items-center">
-            <span className="text-slate-500 text-[11px]">Est. Remaining Duration</span>
-            <span className="font-black text-blue-600 text-xs">
-              {estimatedSemestersLeft} Sem{estimatedSemestersLeft !== 1 ? 's' : ''} (~{estimatedYearsLeft} Yr{estimatedYearsLeft !== 1 ? 's' : ''})
-            </span>
-          </div>
-        )}
-      </div>
-
-      <div className="bg-white border rounded-2xl p-4 shadow-3xs space-y-3 text-xs">
-        <div className="flex justify-between items-center border-b pb-2">
-          <h4 className="text-xs font-black text-slate-900 uppercase">Recommended Schedule</h4>
-          <span className="bg-slate-100 text-slate-800 text-[9px] px-2 py-0.5 rounded-full font-black">
-            {semesterSchedule.length} Sem{semesterSchedule.length !== 1 ? 's' : ''} Planned
-          </span>
-        </div>
-        <div className="space-y-3 max-h-72 overflow-y-auto pr-1">
-          {semesterSchedule.length === 0 && (
-            <p className="text-slate-400 text-[11px] font-semibold py-3 text-center">No recommended subjects to schedule.</p>
-          )}
-          {semesterSchedule.map((sem, semIdx) => (
-            <div key={semIdx} className="border border-slate-100 rounded-xl overflow-hidden">
-              <div className="bg-slate-50 px-2.5 py-1.5 flex justify-between items-center">
-                <span className="font-black text-slate-700 text-[10px] uppercase">{sem.yearLabel ? `${sem.yearLabel} · ${sem.termLabel}` : `Sem ${semIdx + 1} · ${sem.termLabel || `Semester ${semIdx + 1}`}`}</span>
-                <span className="font-mono font-extrabold text-slate-500 text-[10px]">{sem.totalUnits}u / {maxUnitsPerSemester}u</span>
-              </div>
-              <div className="divide-y divide-slate-50">
-                {sem.items.map((item, idx) => (
-                  <div key={idx} className="px-2.5 py-1.5 flex items-center justify-between text-[11px]">
-                    <div className="space-y-0.5 max-w-[75%] text-left"><p className="font-bold text-slate-900 truncate">{item.code}</p><p className="text-slate-400 font-semibold truncate text-[10px]">{item.title}</p></div>
-                    <span className="font-extrabold text-slate-500 bg-white border border-slate-100 px-1.5 py-0.5 rounded font-mono">{item.units}u</span>
-                  </div>
-                ))}
-              </div>
+  return (
+    <div className={`grid grid-cols-1 ${isReturnee ? 'lg:grid-cols-3' : 'w-full'} gap-6 pt-2 text-left animate-fadeIn`}>
+      
+      {/* LEFT SIDEBAR PANEL: Isolated ONLY on Returnee Evaluation Workspace View */}
+      {isReturnee && (
+        <div className="space-y-4 lg:col-span-1">
+          
+          {/* LOA Duration Selector Card Block Component */}
+          <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-3xs space-y-2.5 text-xs">
+            <div className="flex items-center gap-2 border-b pb-2">
+              <Calendar size={14} className="text-[#7D1924]" />
+              <h4 className="text-xs font-black text-slate-900 uppercase">LOA Profile Parameters</h4>
             </div>
-          ))}
-        </div>
-      </div>
-    </div>
-
-    <div className="lg:col-span-2 space-y-4">
-
-      {evaluationStrategy === 'returning' && (
-        <div className="border rounded-2xl overflow-hidden bg-white shadow-sm">
-          <div className="bg-slate-50 p-3 border-b flex justify-between items-center">
-            <span className="text-xs font-black text-slate-950 uppercase">Record Previously Taken Subjects</span>
-            <span className="text-[10px] font-bold text-slate-400">{(studentSubjectsHistory || []).length} recorded</span>
-          </div>
-          <div className="p-4 space-y-4">
-            <div className="space-y-3">
-              <div className="grid grid-cols-1 md:grid-cols-[1fr_1fr] gap-2">
-                <div>
-                  <label className="block text-[10px] font-black text-slate-400 uppercase mb-1">Year</label>
-                  <select
-                    value={selectedYear}
-                    onChange={(e) => setSelectedYear(e.target.value)}
-                    className="w-full border border-slate-200 bg-white p-2.5 rounded-xl text-xs font-bold text-slate-800 outline-none"
-                  >
-                    {YEAR_OPTIONS.map(y => (
-                      <option key={y} value={y}>{y}</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-[10px] font-black text-slate-400 uppercase mb-1">Semester</label>
-                  <select
-                    value={selectedSemester}
-                    onChange={(e) => setSelectedSemester(e.target.value)}
-                    className="w-full border border-slate-200 bg-white p-2.5 rounded-xl text-xs font-bold text-slate-800 outline-none"
-                  >
-                    {SEMESTER_OPTIONS.map(s => (
-                      <option key={s} value={s}>{s}</option>
-                    ))}
-                  </select>
-                </div>
+            <div>
+              <label className="block text-[10px] font-black text-slate-400 uppercase mb-1.5">Years on Official Leave</label>
+              <div className="flex items-center gap-2">
+                <input 
+                  type="number" 
+                  min="0"
+                  max="10"
+                  value={manualLoaYears ?? auditOutput.yearsSinceLastActive ?? 0}
+                  onChange={(e) => onUpdateManualLoaYears && onUpdateManualLoaYears(e.target.value)}
+                  className="w-20 border border-slate-200 bg-slate-50/50 p-2 rounded-xl text-center text-xs font-black text-slate-800 outline-none focus:bg-white focus:border-[#7D1924]"
+                />
+                <span className="font-bold text-slate-500 text-[11px]">Year(s) Inactive</span>
               </div>
-
-              <div className="border border-slate-200 rounded-xl overflow-hidden">
-                <div className="max-h-56 overflow-y-auto">
-                  <table className="w-full text-[11px]">
-                    <thead className="bg-slate-50 sticky top-0 z-10">
-                      <tr className="text-left text-slate-400 uppercase text-[9px] font-black">
-                        <th className="p-2.5 w-8">
-                          <input
-                            type="checkbox"
-                            checked={availableToAdd.length > 0 && availableToAdd.every(c => selectedCodes.has(getCode(c)))}
-                            onChange={() => toggleAllVisible(availableToAdd)}
-                            className="rounded"
-                          />
-                        </th>
-                        <th className="p-2.5">Code</th>
-                        <th className="p-2.5">Title</th>
-                        <th className="p-2.5">Curriculum</th>
-                        <th className="p-2.5 text-right">Units</th>
-                        <th className="p-2.5 text-right">Grade</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {availableToAdd.length === 0 && (
-                        <tr>
-                          <td colSpan={6} className="p-4 text-center text-slate-400 font-semibold">
-                            No subjects found for this Year / Semester.
-                          </td>
-                        </tr>
-                      )}
-                      {availableToAdd.map((c) => {
-                        const code = getCode(c);
-                        const checked = selectedCodes.has(code);
-                        return (
-                          <tr
-                            key={code}
-                            onClick={() => toggleCode(code)}
-                            className={`cursor-pointer border-t border-slate-100 ${checked ? 'bg-blue-50/60' : 'hover:bg-slate-50'}`}
-                          >
-                            <td className="p-2.5" onClick={(e) => e.stopPropagation()}>
-                              <input
-                                type="checkbox"
-                                checked={checked}
-                                onChange={() => toggleCode(code)}
-                                className="rounded"
-                              />
-                            </td>
-                            <td className="p-2.5 font-bold text-slate-900">{code}</td>
-                            <td className="p-2.5 text-slate-500 font-semibold">{getTitle(c)}</td>
-                            <td className="p-2.5">
-                              {getCourseCurriculum(c) ? (
-                                <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full border ${getCourseCurriculum(c) === latestCurriculum
-                                  ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                                  : 'bg-amber-50 text-amber-700 border-amber-200'
-                                  }`}>
-                                  {getCourseCurriculum(c) === latestCurriculum ? 'New' : 'Old'} • {getCourseCurriculum(c)}
-                                </span>
-                              ) : (
-                                <span className="text-slate-300 text-[10px]">—</span>
-                              )}
-                            </td>
-                            <td className="p-2.5 text-right font-mono font-extrabold text-slate-500">{getUnits(c)}u</td>
-                            <td className="p-2.5 text-right" onClick={(e) => e.stopPropagation()}>
-                              <select
-                                value={gradesByCode[code] || '1.0'}
-                                onChange={(e) => setGradeForCode(code, e.target.value)}
-                                className="border border-slate-200 bg-white p-1.5 rounded-lg text-[11px] font-bold text-slate-800 outline-none"
-                              >
-                                {GRADE_OPTIONS.map(g => (
-                                  <option key={g} value={g}>{g}</option>
-                                ))}
-                              </select>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-
-              <div className="flex justify-end">
-                <button
-                  type="button"
-                  onClick={handleSubmitTakenSubjects}
-                  disabled={selectedCodes.size === 0 || isAdding}
-                  className="bg-slate-950 hover:bg-slate-850 text-white px-4 py-2.5 rounded-xl flex items-center justify-center gap-1.5 text-xs font-bold shadow-md disabled:opacity-40"
-                >
-                  <Plus size={14} /> {isAdding ? 'Adding...' : `Add Selected (${selectedCodes.size})`}
-                </button>
-              </div>
+              <p className="text-[10px] text-slate-400 font-medium mt-1.5 leading-relaxed">
+                Manually entering a number greater than <span className="font-bold">3 years</span> will automatically triggers the curriculum shift bridging pipeline rules.
+              </p>
             </div>
+          </div>
 
-            <div className="space-y-1.5 max-h-56 overflow-y-auto pr-1">
-              {(studentSubjectsHistory || []).length === 0 && (
-                <p className="text-slate-400 text-[11px] font-semibold py-3 text-center">No previously taken subjects recorded yet.</p>
+          {/* Curriculum Progress Card */}
+          <div className="bg-slate-50/60 border border-slate-200/60 p-4 rounded-2xl space-y-3.5 text-xs font-semibold">
+            <div className="flex justify-between items-center border-b border-slate-200/60 pb-2">
+              <span className="font-black text-slate-900">Curriculum Progress</span>
+              <span className="text-blue-600 font-extrabold">{auditOutput.completionPercentage}%</span>
+            </div>
+            <div className="w-full bg-slate-200 h-2 rounded-full overflow-hidden">
+              <div className="bg-blue-600 h-full transition-all duration-300" style={{ width: `${auditOutput.completionPercentage}%` }} />
+            </div>
+            <div className="space-y-1.5 pt-1 text-slate-500 text-[11px]">
+              <p className="flex justify-between"><span>Units Earned Mapped</span><span className="font-bold text-slate-900">{auditOutput.unitsEarned} Units</span></p>
+              <p className="flex justify-between"><span>Units Deficient Remaining</span><span className="font-bold text-slate-900">{auditOutput.unitsRemaining} Units</span></p>
+              <p className="flex justify-between"><span>Permitted Credit Boundary</span><span className="font-bold text-slate-900">{minAllowedUnits} – {maxAllowedUnits} Max Units</span></p>
+            </div>
+            {unitsRemaining > 0 && (
+              <div className="pt-2 mt-1 border-t border-slate-200/60 flex justify-between items-center">
+                <span className="text-slate-500 text-[11px]">Est. Remaining Duration</span>
+                <span className="font-black text-blue-600 text-xs">
+                  {estimatedSemestersLeft} Sem{estimatedSemestersLeft !== 1 ? 's' : ''} (~{estimatedYearsLeft} Yr{estimatedYearsLeft !== 1 ? 's' : ''})
+                </span>
+              </div>
+            )}
+          </div>
+
+          {/* Recommended Schedule Card */}
+          <div className="bg-white border rounded-2xl p-4 shadow-3xs space-y-3 text-xs">
+            <div className="flex justify-between items-center border-b pb-2">
+              <h4 className="text-xs font-black text-slate-900 uppercase">Recommended Schedule</h4>
+              <span className="bg-slate-100 text-slate-800 text-[9px] px-2 py-0.5 rounded-full font-black">
+                {semesterSchedule.length} Sem{semesterSchedule.length !== 1 ? 's' : ''} Planned
+              </span>
+            </div>
+            <div className="space-y-3 max-h-72 overflow-y-auto pr-1">
+              {semesterSchedule.length === 0 && (
+                <p className="text-slate-400 text-[11px] font-semibold py-3 text-center">No recommended subjects to schedule.</p>
               )}
-              {(studentSubjectsHistory || []).map((s) => (
-                <div key={s.id} className="bg-emerald-50/40 border border-emerald-100 p-2.5 rounded-xl flex items-center justify-between text-[11px]">
-                  <div className="flex items-center gap-2 max-w-[75%]">
-                    <CheckCircle2 size={14} className="text-emerald-600 shrink-0" />
-                    <div className="space-y-0.5 text-left">
-                      <p className="font-bold text-slate-900 truncate">{s.subjectCode}</p>
-                      <p className="text-slate-400 font-semibold truncate text-[10px]">
-                        {s.subjectTitle} • {s.termSaved || `${s.yearTaken || ''} ${s.semesterTaken || ''}`.trim()} • Grade: {s.grade}
-                        {s.curriculumTrack ? ` • ${s.curriculumTrack}` : ''}
-                      </p>
-                    </div>
+              {semesterSchedule.map((sem, semIdx) => (
+                <div key={semIdx} className="border border-slate-100 rounded-xl overflow-hidden">
+                  <div className="bg-slate-50 px-2.5 py-1.5 flex justify-between items-center">
+                    <span className="font-black text-slate-700 text-[10px] uppercase">{sem.yearLabel ? `${sem.yearLabel} · ${sem.termLabel}` : `Sem ${semIdx + 1} · ${sem.termLabel || `Semester ${semIdx + 1}`}`}</span>
+                    <span className="font-mono font-extrabold text-slate-500 text-[10px]">{sem.totalUnits}u / {maxUnitsPerSemester}u</span>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => onDeleteManualSubject(s.id)}
-                    aria-label={`Remove ${s.subjectCode || 'manual entry'}`}
-                    title="Remove entry"
-                    className="text-rose-500 hover:text-rose-700 p-1.5 rounded-lg hover:bg-rose-50"
-                  >
-                    <Trash2 size={14} />
-                  </button>
+                  <div className="divide-y divide-slate-50">
+                    {sem.items.map((item, idx) => (
+                      <div key={idx} className="px-2.5 py-1.5 flex items-center justify-between text-[11px]">
+                        <div className="space-y-0.5 max-w-[75%] text-left">
+                          <p className="font-bold text-slate-900 truncate">{item.code}</p>
+                          <p className="text-slate-400 font-semibold truncate text-[10px]">{item.title}</p>
+                        </div>
+                        <span className="font-extrabold text-slate-500 bg-white border border-slate-100 px-1.5 py-0.5 rounded font-mono">{item.units}u</span>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               ))}
             </div>
@@ -467,44 +356,238 @@ return (
         </div>
       )}
 
-      <div className="border rounded-2xl overflow-hidden bg-white shadow-sm">
-        <div className="bg-slate-50 p-3 border-b flex justify-between items-center">
-          <span className="text-xs font-black text-slate-950 uppercase">Analysis Logs & Rule Results</span>
-          <span className={`text-[10px] font-black uppercase tracking-wider px-3 py-1 rounded-full border ${auditOutput.overallEligibility === 'ELIGIBLE' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-amber-50 text-amber-700 border-amber-200'
-            }`}>{auditOutput.overallEligibility}</span>
-        </div>
-
-        <div className="p-4 space-y-4">
-          {auditOutput.alerts?.length > 0 && (
-            <div className="space-y-2">
-              {auditOutput.alerts.map((alertText, index) => (
-                <div key={index} className="bg-amber-50/50 border border-amber-200 text-amber-900 text-xs p-3 rounded-xl flex items-start gap-2.5">
-                  <AlertTriangle size={15} className="text-amber-600 shrink-0 mt-0.5" /><p className="font-semibold leading-relaxed">{alertText}</p>
-                </div>
-              ))}
-            </div>
-          )}
-
-          <div className="space-y-2 font-semibold">
-            <h4 className="text-xs font-black text-slate-400 uppercase tracking-wide">Target Requirement Checksheet</h4>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-2 max-h-64 overflow-y-auto text-left">
-              {auditOutput.deficiencies?.map((def, idx) => (
-                <div key={idx} className="bg-rose-50/20 border border-rose-100 p-2.5 rounded-xl flex items-start gap-2 text-[11px]">
-                  <ShieldAlert size={14} className="text-rose-600 shrink-0 mt-0.5" /><p className="text-slate-700 font-semibold leading-relaxed">{def}</p>
-                </div>
-              ))}
-            </div>
+      {/* RIGHT SIDE / MAIN CONTENT AREA */}
+      <div className={`${isReturnee ? 'lg:col-span-2' : 'w-full'} space-y-4`}>
+        
+        {/* Core Subject Matrix Table */}
+        <div className="bg-white border rounded-2xl overflow-hidden shadow-3xs">
+          <div className="bg-slate-50/50 px-4 py-3 border-b border-slate-200 flex justify-between items-center">
+            <span className="font-bold text-slate-800 text-sm flex items-center gap-2">
+              <span className="text-slate-400 text-xs">▼</span> {studentSemester || '1st Semester'}
+            </span>
+            <span className="bg-blue-50 text-blue-700 text-[11px] px-2.5 py-0.5 rounded-full font-bold">
+              {(studentSubjectsHistory || []).length} Courses Record
+            </span>
           </div>
 
-          <div className="flex justify-end gap-2 pt-2 border-t text-xs font-bold">
-            <button type="button" onClick={() => triggerReportModalOpen(evaluationStrategy)} className="border border-slate-200 hover:bg-slate-50 text-slate-800 px-4 py-2 rounded-xl flex items-center gap-1.5"><Printer size={13} /> Preview Checksheet PDF</button>
-            <button type="button" onClick={handleFinalizeEvaluationMatrix} disabled={isSubmitting} className="bg-slate-950 hover:bg-slate-850 text-white px-5 py-2.5 rounded-xl flex items-center gap-1.5 shadow-md">
-              {isSubmitting ? "Finalizing Pipeline..." : "Finalize & Record Evaluation"}
-            </button>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse text-xs">
+              <thead>
+                <tr className="bg-white text-[10px] text-slate-400 uppercase font-bold border-b border-slate-200">
+                  <th className="p-4">Academic Term</th>
+                  <th className="p-4">Subject Code</th>
+                  <th className="p-4">Descriptive Title</th>
+                  <th className="p-4 text-center">Units</th>
+                  <th className="p-4 text-right pr-6">Grade Rating</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 font-medium text-slate-600">
+                {(!studentSubjectsHistory || studentSubjectsHistory.length === 0) ? (
+                  <tr>
+                    <td colSpan="5" className="p-8 text-center text-slate-400 font-semibold">
+                      No active academic course load records listed.
+                    </td>
+                  </tr>
+                ) : (
+                  studentSubjectsHistory.map((subject, idx) => {
+                    const sCode = (subject.subjectCode || '').toUpperCase();
+                    const isEditing = editingCode === sCode;
+                    const currentDisplayGrade = subject.grade || 'In Progress';
+
+                    return (
+                      <tr key={sCode || idx} className="hover:bg-slate-50/40 transition-colors group">
+                        <td className="p-4 text-slate-400 font-semibold">{subject.academicTerm || '2026-2027'}</td>
+                        <td className="p-4 font-bold text-slate-900">{subject.subjectCode}</td>
+                        <td className="p-4 text-slate-500 font-semibold">{subject.subjectTitle || subject.descriptiveTitle}</td>
+                        <td className="p-4 text-center font-bold text-slate-900">{subject.units || 3}</td>
+                        <td className="p-4 text-right pr-6">
+                          {isEditing ? (
+                            <div className="flex items-center justify-end gap-1.5">
+                              <select
+                                value={tempGrade}
+                                onChange={(e) => setTempGrade(e.target.value)}
+                                disabled={isUpdating}
+                                className="text-[11px] bg-white border border-slate-300 rounded-md px-2 py-1 font-mono font-bold text-slate-800 focus:outline-none"
+                              >
+                                {GRADE_OPTIONS.map((gr) => (
+                                  <option key={gr} value={gr}>{gr}</option>
+                                ))}
+                              </select>
+                              <button onClick={() => handleSaveGrade(sCode)} disabled={isUpdating} className="p-1 text-emerald-600 hover:bg-emerald-50 rounded-md">
+                                <Check className="w-3.5 h-3.5 stroke-3" />
+                              </button>
+                              <button onClick={handleCancelEdit} disabled={isUpdating} className="p-1 text-rose-500 hover:bg-rose-50 rounded-md">
+                                <X className="w-3.5 h-3.5 stroke-3" />
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="flex items-center justify-end gap-2">
+                              <span className={`font-bold font-mono text-xs ${currentDisplayGrade === 'In Progress' ? 'text-slate-900' : 'text-blue-600'}`}>
+                                {currentDisplayGrade}
+                              </span>
+                              <button
+                                onClick={() => handleStartEdit(sCode, subject.grade)}
+                                className="p-1 text-slate-400 hover:text-blue-600 hover:bg-slate-100 rounded-md opacity-0 group-hover:opacity-100 transition-all"
+                              >
+                                <Edit2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
           </div>
         </div>
+
+        {/* Record Previously Taken Subjects */}
+        {isReturnee && (
+          <div className="border rounded-2xl overflow-hidden bg-white shadow-sm">
+            <div className="bg-slate-50 p-3 border-b flex justify-between items-center">
+              <span className="text-xs font-black text-slate-950 uppercase">Record Previously Taken Subjects</span>
+              <span className="text-[10px] font-bold text-slate-400">{(studentSubjectsHistory || []).length} recorded</span>
+            </div>
+            <div className="p-4 space-y-4">
+              <div className="space-y-3">
+                <div className="grid grid-cols-1 md:grid-cols-[1fr_1fr] gap-2">
+                  <div>
+                    <label className="block text-[10px] font-black text-slate-400 uppercase mb-1">Year</label>
+                    <select value={selectedYear} onChange={(e) => setSelectedYear(e.target.value)} className="w-full border border-slate-200 bg-white p-2.5 rounded-xl text-xs font-bold text-slate-800 outline-none">
+                      {YEAR_OPTIONS.map(y => <option key={y} value={y}>{y}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-black text-slate-400 uppercase mb-1">Semester</label>
+                    <select value={selectedSemester} onChange={(e) => setSelectedSemester(e.target.value)} className="w-full border border-slate-200 bg-white p-2.5 rounded-xl text-xs font-bold text-slate-800 outline-none">
+                      {SEMESTER_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
+                    </select>
+                  </div>
+                </div>
+
+                <div className="border border-slate-200 rounded-xl overflow-hidden">
+                  <div className="max-h-56 overflow-y-auto">
+                    <table className="w-full text-[11px]">
+                      <thead className="bg-slate-50 sticky top-0 z-10">
+                        <tr className="text-left text-slate-400 uppercase text-[9px] font-black">
+                          <th className="p-2.5 w-8">
+                            <input type="checkbox" checked={availableToAdd.length > 0 && availableToAdd.every(c => selectedCodes.has(getCode(c)))} onChange={() => toggleAllVisible(availableToAdd)} className="rounded" />
+                          </th>
+                          <th className="p-2.5">Code</th>
+                          <th className="p-2.5">Title</th>
+                          <th className="p-2.5">Curriculum</th>
+                          <th className="p-2.5 text-right">Units</th>
+                          <th className="p-2.5 text-right">Grade</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {availableToAdd.length === 0 && (
+                          <tr><td colSpan={6} className="p-4 text-center text-slate-400 font-semibold">No subjects found for this Year / Semester.</td></tr>
+                        )}
+                        {availableToAdd.map((c) => {
+                          const code = getCode(c);
+                          const checked = selectedCodes.has(code);
+                          return (
+                            <tr key={code} onClick={() => toggleCode(code)} className={`cursor-pointer border-t border-slate-100 ${checked ? 'bg-blue-50/60' : 'hover:bg-slate-50'}`}>
+                              <td className="p-2.5" onClick={(e) => e.stopPropagation()}>
+                                <input type="checkbox" checked={checked} onChange={() => toggleCode(code)} className="rounded" />
+                              </td>
+                              <td className="p-2.5 font-bold text-slate-900">{code}</td>
+                              <td className="p-2.5 text-slate-500 font-semibold">{getTitle(c)}</td>
+                              <td className="p-2.5">
+                                {getCourseCurriculum(c) ? (
+                                  <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full border ${getCourseCurriculum(c) === latestCurriculum ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-amber-50 text-amber-700 border-amber-200'}`}>
+                                    {getCourseCurriculum(c) === latestCurriculum ? 'New' : 'Old'} • {getCourseCurriculum(c)}
+                                  </span>
+                                ) : <span className="text-slate-300 text-[10px]">—</span>}
+                              </td>
+                              <td className="p-2.5 text-right font-mono font-extrabold text-slate-500">{getUnits(c)}u</td>
+                              <td className="p-2.5 text-right" onClick={(e) => e.stopPropagation()}>
+                                <select value={gradesByCode[code] || '1.0'} onChange={(e) => setGradeForCode(code, e.target.value)} className="border border-slate-200 bg-white p-1.5 rounded-lg text-[11px] font-bold text-slate-800 outline-none">
+                                  {GRADE_OPTIONS.map(g => <option key={g} value={g}>{g}</option>)}
+                                </select>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                <div className="flex justify-end">
+                  <button type="button" onClick={handleSubmitTakenSubjects} disabled={selectedCodes.size === 0 || isAdding} className="bg-slate-950 hover:bg-slate-850 text-white px-4 py-2.5 rounded-xl flex items-center justify-center gap-1.5 text-xs font-bold shadow-md disabled:opacity-40">
+                    <Plus size={14} /> {isAdding ? 'Adding...' : `Add Selected (${selectedCodes.size})`}
+                  </button>
+                </div>
+              </div>
+
+              <div className="space-y-1.5 max-h-56 overflow-y-auto pr-1">
+                {(studentSubjectsHistory || []).length === 0 && <p className="text-slate-400 text-[11px] font-semibold py-3 text-center">No previously taken subjects recorded yet.</p>}
+                {(studentSubjectsHistory || []).map((s) => (
+                  <div key={s.id} className="bg-emerald-50/40 border border-emerald-100 p-2.5 rounded-xl flex items-center justify-between text-[11px]">
+                    <div className="flex items-center gap-2 max-w-[75%]">
+                      <CheckCircle2 size={14} className="text-emerald-600 shrink-0" />
+                      <div className="space-y-0.5 text-left">
+                        <p className="font-bold text-slate-900 truncate">{s.subjectCode}</p>
+                        <p className="text-slate-400 font-semibold truncate text-[10px]">
+                          {s.subjectTitle} • {s.termSaved || `${s.yearTaken || ''} ${s.semesterTaken || ''}`.trim()} • Grade: {s.grade}
+                        </p>
+                      </div>
+                    </div>
+                    <button type="button" onClick={() => onDeleteManualSubject(s.id)} className="text-rose-500 hover:text-rose-700 p-1.5 rounded-lg hover:bg-rose-50">
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Analysis Logs & Pipeline Feedback Block */}
+        <div className="border rounded-2xl overflow-hidden bg-white shadow-sm">
+          <div className="bg-slate-50 p-3 border-b flex justify-between items-center">
+            <span className="text-xs font-black text-slate-950 uppercase">Analysis Logs & Rule Results</span>
+            <span className={`text-[10px] font-black uppercase tracking-wider px-3 py-1 rounded-full border ${auditOutput.overallEligibility === 'ELIGIBLE' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-amber-50 text-amber-700 border-amber-200'}`}>{auditOutput.overallEligibility}</span>
+          </div>
+
+          <div className="p-4 space-y-4">
+            {auditOutput.alerts?.length > 0 && (
+              <div className="space-y-2">
+                {auditOutput.alerts.map((alertText, index) => (
+                  <div key={index} className="bg-amber-50/50 border border-amber-200 text-amber-900 text-xs p-3 rounded-xl flex items-start gap-2.5">
+                    <AlertTriangle size={15} className="text-amber-600 shrink-0 mt-0.5" />
+                    <p className="font-semibold leading-relaxed">{alertText}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="space-y-2 font-semibold">
+              <h4 className="text-xs font-black text-slate-400 uppercase tracking-wide">Target Requirement Checksheet</h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2 max-h-64 overflow-y-auto text-left">
+                {auditOutput.deficiencies?.map((def, idx) => (
+                  <div key={idx} className="bg-rose-50/20 border border-rose-100 p-2.5 rounded-xl flex items-start gap-2 text-[11px]">
+                    <ShieldAlert size={14} className="text-rose-600 shrink-0 mt-0.5" />
+                    <p className="text-slate-700 font-semibold leading-relaxed">{def}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2 border-t text-xs font-bold">
+              <button type="button" onClick={() => triggerReportModalOpen(evaluationStrategy)} className="border border-slate-200 hover:bg-slate-50 text-slate-800 px-4 py-2 rounded-xl flex items-center gap-1.5"><Printer size={13} /> Preview Checksheet PDF</button>
+              <button type="button" onClick={handleFinalizeEvaluationMatrix} disabled={isSubmitting} className="bg-slate-950 hover:bg-slate-850 text-white px-5 py-2.5 rounded-xl flex items-center gap-1.5 shadow-md">
+                {isSubmitting ? "Finalizing Pipeline..." : "Finalize & Record Evaluation"}
+              </button>
+            </div>
+          </div>
+        </div>
+
       </div>
     </div>
-  </div>
-);
+  );
 }

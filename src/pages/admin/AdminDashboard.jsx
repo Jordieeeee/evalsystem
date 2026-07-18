@@ -47,7 +47,7 @@ const AdminDashboard = () => {
   return (
     <div className="min-h-screen bg-[#f8faf7] flex flex-col font-sans antialiased text-slate-800">
 
-      {/* Top Header Navigation (Identical Layout, Fonts & Colors to Student Dashboard) */}
+      {/* Top Header Navigation */}
       <header className="h-16 bg-white border-b border-slate-100 sticky top-0 z-40 px-6 flex items-center justify-between shadow-xs">
         {/* Logo and Brand Title Identity */}
         <div className="flex items-center gap-3">
@@ -69,25 +69,8 @@ const AdminDashboard = () => {
           </div>
         </div>
 
-        {/* Global Context Search Box */}
-        <div className="hidden md:flex items-center relative w-80">
-          <Search className="absolute left-3.5 text-slate-400" size={14} />
-
-          <input
-            type="text"
-            placeholder="Search resources..."
-            className="w-full bg-[#f4f7f3] border border-transparent text-xs pl-10 pr-4 py-2 rounded-xl focus:outline-none focus:ring-1 focus:ring-[#375534]/30 focus:bg-white transition-all text-slate-800 font-medium placeholder-slate-400"
-          />
-        </div>
-
         {/* Operational Profile Utilities */}
         <div className="flex items-center gap-4">
-          <button className="p-2 text-slate-500 hover:text-[#7D1924] hover:bg-slate-50 rounded-xl transition-all relative">
-            <Bell size={18} />
-            <span className="absolute top-2 right-2 w-1.5 h-1.5 bg-rose-600 rounded-full" />
-          </button>
-          <div className="h-6 w-[1px] bg-slate-100 mx-1" />
-
           {/* Admin Account Information Box Element */}
           <div className="flex items-center gap-3">
             <div className="text-right leading-none hidden sm:block">
@@ -104,7 +87,7 @@ const AdminDashboard = () => {
       {/* Workspace Frame Wrapper Section */}
       <div className="flex-1 flex w-full">
 
-        {/* Left Side Sidebar Panel (Identical Minimal Clean Style to Student Dashboard) */}
+        {/* Left Side Sidebar Panel */}
         <aside className="w-64 bg-white border-r border-slate-100 flex flex-col justify-between p-4 shrink-0">
           <nav className="space-y-1">
             {menuItems.map((item) => {
