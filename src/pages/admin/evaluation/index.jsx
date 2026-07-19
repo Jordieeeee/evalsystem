@@ -417,9 +417,9 @@
       const activeCodes = [];
 
       // Helper utility to strictly strip punctuation, spaces, and capitalize (e.g. "GEd_102" & "GED 102" -> "GED102")
-      const normalizeSubjectCode = (code) => {
-        return String(code || '').replace(/[^a-zA-Z0-9]/g, '').toUpperCase().trim();
-      };
+const normalizeSubjectCode = (code) => {
+  return String(code || '').trim().toUpperCase();
+};
 
       studentSubjectsHistory.forEach(s => {
         const rawCode = String(s.subjectCode || '').toUpperCase();
@@ -611,15 +611,14 @@ if (evaluationStrategy === 'returning' || evaluationStrategy === 'shiftee') {
       warningAlerts.push(`Academic Warning: Load counter evaluates underload (${simulatedLoad} units). Minimum standard is ${minAllowedUnits} units.`);
     }
 
-    const totalRequired = catalog.length;
-    const passedOrCreditedCount = targets.filter(t => ['Completed', 'Credited'].includes(t.status)).length;
-    const completionPercentage = totalRequired > 0 ? ((passedOrCreditedCount / totalRequired) * 100).toFixed(1) : pipelineResult.completionPercentage || '0.0';
+const completionPercentage = pipelineResult.totalRequired > 0
+  ? ((pipelineResult.unitsEarned / pipelineResult.totalRequired) * 100).toFixed(1)
+  : '0.0';
 
-        return {
-          ...pipelineResult,
-          completionPercentage,
-          totalRequired,
-          recommendedStudyPlan,
+    return {
+      ...pipelineResult,
+      completionPercentage,
+      recommendedStudyPlan,
           // Only override pipelineResult's recommendedRoadmap for the 'returning'
           // track (which computes its own year/semester-grouped roadmap above).
           // Other tracks (e.g. transferee) already return a correct, fully-built

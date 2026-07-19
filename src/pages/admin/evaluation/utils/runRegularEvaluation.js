@@ -3,73 +3,70 @@
  * Location: src/pages/admin/evaluation/utils/runRegularEvaluation.js
  */
 
-export function runRegularEvaluation(studentData, catalogData, config = {}) {
-  // --- AGGRESSIVE DATA STRIPPING ---
-  // Forcefully mutate and delete properties to stop the UI from rendering these cards
-  if (studentData) {
-    // Kill Recommended Schedule & Curriculum Progress data targets
-    delete studentData.recommendedSchedule;
-    delete studentData.curriculumProgress;
-    delete studentData.progress;
-    delete studentData.curriculum;
-    
-    // Fallbacks to blank arrays so the cards collapse/have nothing to loop over
-    studentData.recommendedSchedule = [];
-    studentData.curriculumProgress = {};
-    studentData.plannedSchedules = [];
-  }
+function getCode(c) {
+  return (c.courseCode || c.code || c.id || '').toUpperCase();
+}
+function getTitle(c) {
+  return c.courseTitle || c.title || c.id;
+}
+function getUnits(c) {
+  return parseInt(c.creditUnits || c.units || 3, 10);
+}
 
-  if (catalogData) {
-    // Kill Catalog Registry Browser data targets
-    delete catalogData.subjects;
-    delete catalogData.courses;
-    delete catalogData.tree;
-    
-    catalogData.subjects = [];
-    catalogData.courses = [];
-  }
+export function runRegularEvaluation(catalog, subjectStatuses, passedCodes = []) {
+  let deficiencies = [];
+  let alerts = [];
+  let unitsEarned = 0;
+  let unitsRemaining = 0;
 
-  // --- SAFE FALLBACK TRACKING ---
-  if (!studentData || !catalogData) {
+  alerts.push("Regular Evaluation Track Active: Standard semester-by-semester progression check.");
+
+  const subjectList = (catalog || []).map((course) => {
+    const codeClean = getCode(course);
+    const info = subjectStatuses[codeClean] || { status: 'Not Taken', grade: '-', source: 'BSU' };
+    const unitsValue = getUnits(course);
+
+    if (['Completed', 'Credited'].includes(info.status)) {
+      unitsEarned += unitsValue;
+    } else {
+      unitsRemaining += unitsValue;
+      if (info.status === 'Failed') {
+        deficiencies.push(`Failed Subject: [${codeClean}] ${getTitle(course)} — requires retake.`);
+      }
+    }
+
     return {
-      success: false,
-      auditOutput: null,
-      studentSubjectsHistory: []
-    };
-  }
-
-  const activeTerm = studentData.currentTerm || "2026-2027";
-
-  // Process ONLY the core Course Load data array
-  const processedCourseLoad = (studentData.enrolledSubjects || []).map((subject) => {
-    return {
-      academicTerm: subject.academicTerm || activeTerm,
-      subjectCode: (subject.subjectCode || "").toUpperCase(),
-      descriptiveTitle: subject.descriptiveTitle || subject.subjectTitle || "No Title Provided",
-      units: Number(subject.units || 3),
-      grade: subject.grade || "In Progress"
+      code: codeClean,
+      title: getTitle(course),
+      units: unitsValue,
+      status: info.status,
+      grade: info.grade,
+      missingPrereqs: [],
+      prereqsCleared: true,
     };
   });
 
-  // --- RETURN OBLITERATED PAYLOAD ---
-  return {
-    success: true,
-    evaluationStrategy: "Regular Evaluation Model",
-    minAllowedUnits: config.minAllowedUnits || 15,
-    maxAllowedUnits: config.maxAllowedUnits || 24,
-    
-    // Explicitly kill the return keys just in case
-    curriculumProgress: null,
-    recommendedSchedule: null,
-    catalogBrowser: null,
-    catalog: null,
+  const totalRequired = unitsEarned + unitsRemaining;
+  const completionPercentage = totalRequired > 0 ? Math.round((unitsEarned / totalRequired) * 100) : 0;
 
-    auditOutput: {
-      generatedAt: new Date().toISOString(),
-      summary: {
-        status: "Active Regular Matrix Review"
-      }
-    },
-    studentSubjectsHistory: processedCourseLoad
+  // "Eligible to advance" means: no failed subjects and no other deficiencies
+  // blocking progression to the next semester/term.
+  const isEligibleToAdvance = deficiencies.length === 0;
+
+  if (deficiencies.length > 0) {
+    alerts.push(`Academic Hold: ${deficiencies.length} deficiency(ies) found — student is NOT eligible to advance to the next term.`);
+  }
+
+  return {
+    unitsEarned,
+    unitsRemaining,
+    totalRequired,
+    completionPercentage,
+    subjectList,
+    deficiencies,
+    alerts,
+    isEligibleToAdvance,
+    overallEligibility: isEligibleToAdvance ? "ELIGIBLE TO ADVANCE" : "NOT ELIGIBLE TO ADVANCE",
+    recommendedRoadmap: [],
   };
 }

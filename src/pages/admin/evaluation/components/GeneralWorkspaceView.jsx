@@ -24,8 +24,13 @@ export default function GeneralWorkspaceView({
 
   if (!auditOutput) return null;
 
-  // Flags to check the evaluation context
+// Flags to check the evaluation context
   const isReturnee = String(evaluationStrategy || '').toLowerCase() === 'returning';
+  const isRegular = String(evaluationStrategy || '').toLowerCase() === 'regular';
+  // Regular students also need a way to record their completed subjects
+  // (with grades), just without the LOA-specific sidebar (years-on-leave,
+  // multi-term recommended schedule) that only makes sense for returnees.
+  const canRecordTakenSubjects = isReturnee || isRegular;
 
   // Inline Grade Editing handlers
   const handleStartEdit = (subjectCode, currentGrade) => {
@@ -443,8 +448,8 @@ export default function GeneralWorkspaceView({
           </div>
         </div>
 
-        {/* Record Previously Taken Subjects */}
-        {isReturnee && (
+{/* Record Previously Taken Subjects */}
+        {canRecordTakenSubjects && (
           <div className="border rounded-2xl overflow-hidden bg-white shadow-sm">
             <div className="bg-slate-50 p-3 border-b flex justify-between items-center">
               <span className="text-xs font-black text-slate-950 uppercase">Record Previously Taken Subjects</span>

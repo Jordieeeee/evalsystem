@@ -9,9 +9,10 @@ import { subjectService } from '../../../services/subjectService';
 import universitySeal from '../../../assets/logo/logo.png';
 
 export default function AdminReportsPage() {
-  const [loading, setLoading] = useState(true);
+const [loading, setLoading] = useState(true);
   const [activeReport, setActiveReport] = useState('student');
   const [evaluationFilter, setEvaluationFilter] = useState('ALL');
+  const [searchQuery, setSearchQuery] = useState('');
   
   // Core Data Registries
   const [students, setStudents] = useState([]);
