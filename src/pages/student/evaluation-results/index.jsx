@@ -114,13 +114,7 @@ export default function StudentEvaluationResultsPage() {
           >
             <FileSpreadsheet size={14} /> Export CSV
           </button>
-          <button
-            onClick={() => downloadPdf(displayName, student, subjects, metrics)}
-            disabled={subjects.length === 0}
-            className="flex items-center gap-2 bg-[#7D1924] text-[#FCEEEF] text-xs font-black uppercase tracking-wider px-5 py-2.5 rounded-xl hover:bg-[#63121b] transition-all shadow-sm active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed"
-          >
-            <Download size={14} /> Export PDF
-          </button>
+          
         </div>
       </div>
 

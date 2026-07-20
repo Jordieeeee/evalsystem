@@ -19,7 +19,7 @@
     import { runShifteeEvaluation } from './utils/runShifteeEvaluation';
     import { runReturningStudentEvaluation } from './utils/runReturningStudentEvaluation';
     // --- DECOUPLED CHILD UI LAYOUT IMPORTS ---
-    import DashboardOverview from './components/DashboardOverview';
+    // import DashboardOverview from './components/DashboardOverview';
     import GraduationPipelineView from './components/GraduationPipelineView';
     import TransfereeShifteeView from './components/TransfereeShifteeView';
     import GeneralWorkspaceView from './components/GeneralWorkspaceView';
@@ -717,7 +717,7 @@ recommendedRoadmap: ['returning', 'shiftee', 'regular'].includes(evaluationStrat
             <p className="text-slate-500 text-xs font-semibold mt-0.5">Automated rule processing frameworks across multiple dynamic student admission tracking tracks.</p>
           </div>
           <div className="flex gap-2 flex-wrap">
-            <button onClick={() => setModuleView('dashboard')} className={`px-4 py-2 text-xs font-bold rounded-xl border ${moduleView === 'dashboard' ? 'bg-slate-950 text-white shadow-sm' : 'bg-white hover:bg-slate-50'}`}>Dashboard Overview</button>
+            {/* <button onClick={() => setModuleView('dashboard')} className={`px-4 py-2 text-xs font-bold rounded-xl border ${moduleView === 'dashboard' ? 'bg-slate-950 text-white shadow-sm' : 'bg-white hover:bg-slate-50'}`}>Dashboard Overview</button> */}
             <button onClick={() => setModuleView('workspace')} className={`px-4 py-2 text-xs font-bold rounded-xl border ${moduleView === 'workspace' ? 'bg-slate-950 text-white shadow-sm' : 'bg-white hover:bg-slate-50'}`}>Audit Workspace</button>
             <button onClick={() => setModuleView('history-logs')} className={`px-4 py-2 text-xs font-bold rounded-xl border ${moduleView === 'history-logs' ? 'bg-slate-950 text-white shadow-sm' : 'bg-white hover:bg-slate-50'}`}>History Trails</button>
           </div>

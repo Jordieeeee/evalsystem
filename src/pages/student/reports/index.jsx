@@ -162,12 +162,7 @@ export default function StudentReportsPage() {
           >
             <Printer size={14} /> Print
           </button>
-          <button
-            onClick={triggerExportPdf}
-            className="flex items-center justify-center gap-2 bg-[#7D1924] text-[#FCEEEF] text-xs font-black uppercase tracking-wider px-5 py-2.5 rounded-xl hover:bg-[#63121b] transition-all shadow-sm active:scale-[0.98] flex-1 sm:flex-none"
-          >
-            <Download size={14} /> Export PDF
-          </button>
+          
         </div>
       </div>
 
