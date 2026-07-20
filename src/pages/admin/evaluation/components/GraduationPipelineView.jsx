@@ -14,7 +14,8 @@ export default function GraduationPipelineView({
   oldSubjectsCatalog, 
   studentSubjectsHistory, 
   handleFinalizeEvaluationMatrix, 
-  isSubmitting 
+  isSubmitting,
+  effectiveCurriculum
 }) {
   const [expandedYear, setExpandedYear] = useState(null);
 
@@ -31,51 +32,86 @@ export default function GraduationPipelineView({
   // =========================================================================
   // DYNAMIC ACADEMIC STUDY & REMEDIATION PLAN GENERATOR
   // =========================================================================
-  const generateRemediationPlan = () => {
+ const generateRemediationPlan = () => {
     const missingSubjects = auditOutput.missingSubjects || [];
-    const activeCatalog = selectedStudentData.curriculum === 'NEW' ? newSubjectsCatalog : oldSubjectsCatalog;
+    const activeCatalog = (effectiveCurriculum === 'NEW' ? newSubjectsCatalog : oldSubjectsCatalog) || [];
+    const maxUnitsPerTerm = selectedStudentData?.maxAllowedUnits || 21;
 
     const detailedMissing = missingSubjects.map(miss => {
       const targetCode = String(miss.courseCode || miss.code || '').toUpperCase().trim();
-      const catalogMatch = activeCatalog.find(c => String(c.courseCode || c.id || '').toUpperCase().trim() === targetCode);
+      const catalogMatch = activeCatalog.find(c => String(c.courseCode || c.code || c.id || '').toUpperCase().trim() === targetCode);
       const historyRecord = studentSubjectsHistory.find(h => String(h.subjectCode).toUpperCase().trim() === targetCode);
 
       return {
         courseCode: targetCode,
         courseTitle: catalogMatch?.courseTitle || miss.courseTitle || miss.title || 'Required Subject Block',
         creditUnits: Number(catalogMatch?.creditUnits || miss.creditUnits || 3),
-        semestersOffered: catalogMatch?.semesterOffered || ['First Semester'],
+        semestersOffered: (Array.isArray(catalogMatch?.semesterOffered) ? catalogMatch.semesterOffered : (catalogMatch?.semesterOffered ? [catalogMatch.semesterOffered] : ['First Semester'])),
+        yearLevel: catalogMatch?.yearLevel || miss.yearLevel || null,
         historicalGrade: historyRecord?.grade || null,
         historicalStatus: historyRecord?.status || null
       };
     });
 
-    // Calculate target academic year
-    const currentYearStr = selectedStudentData.academicYear || '2025-2026';
-    const startYear = parseInt(currentYearStr.split('-')[0]) + 1;
-    const nextAcadYear = `${startYear}-${startYear + 1}`;
-
-    const slots = {
-      [`First Semester, A.Y. ${nextAcadYear}`]: [],
-      [`Second Semester, A.Y. ${nextAcadYear}`]: [],
-      [`Summer Term, A.Y. ${nextAcadYear}`]: []
-    };
-
-    detailedMissing.forEach(course => {
-      const offeredNormalized = (course.semestersOffered || []).map(s => normalizeSemester(s));
-      
-      if (offeredNormalized.includes('1st')) {
-        slots[`First Semester, A.Y. ${nextAcadYear}`].push(course);
-      } else if (offeredNormalized.includes('2nd')) {
-        slots[`Second Semester, A.Y. ${nextAcadYear}`].push(course);
-      } else if (offeredNormalized.includes('summer')) {
-        slots[`Summer Term, A.Y. ${nextAcadYear}`].push(course);
-      } else {
-        slots[`First Semester, A.Y. ${nextAcadYear}`].push(course); // Default Enlistment fallback
-      }
+    // Sort by catalog year level first, so earlier-year deficiencies get
+    // scheduled before later-year ones instead of an arbitrary catalog order.
+    const sortedMissing = [...detailedMissing].sort((a, b) => {
+      const yearA = normalizeYear(a.yearLevel) || '99';
+      const yearB = normalizeYear(b.yearLevel) || '99';
+      return String(yearA).localeCompare(String(yearB));
     });
 
-    return { nextAcadYear, slots };
+    // Calculate starting academic year
+    const currentYearStr = selectedStudentData.academicYear || '2025-2026';
+    let cursorYear = parseInt(currentYearStr.split('-')[0], 10) + 1;
+    let termIndex = 0; // 0 = 1st Sem, 1 = 2nd Sem, 2 = Summer
+    const TERM_LABELS = ['First Semester', 'Second Semester', 'Summer Term'];
+
+    const slots = {}; // ordered map: "Term Label, A.Y. YYYY-YYYY" -> array of courses
+    let remaining = [...sortedMissing];
+    let safetyGuard = 0;
+    const maxIterations = remaining.length * 3 + 10;
+
+    const advanceTerm = () => {
+      termIndex++;
+      if (termIndex >= TERM_LABELS.length) {
+        termIndex = 0;
+        cursorYear++;
+      }
+    };
+
+    while (remaining.length > 0 && safetyGuard < maxIterations) {
+      safetyGuard++;
+      const acadYear = `${cursorYear}-${cursorYear + 1}`;
+      const termLabel = TERM_LABELS[termIndex];
+      const slotKey = `${termLabel}, A.Y. ${acadYear}`;
+
+      const normalizedTermKey = termIndex === 0 ? '1st' : termIndex === 1 ? '2nd' : 'summer';
+
+      // Subjects offered in this specific term (or with no offering data, treated as flexible)
+      const eligible = remaining.filter(course => {
+        const offered = (course.semestersOffered || []).map(s => normalizeSemester(s));
+        return offered.length === 0 || offered.includes(normalizedTermKey);
+      });
+
+      let bucketUnits = 0;
+      const bucketItems = [];
+      eligible.forEach(course => {
+        if (bucketUnits + course.creditUnits <= maxUnitsPerTerm) {
+          bucketItems.push(course);
+          bucketUnits += course.creditUnits;
+        }
+      });
+
+      if (bucketItems.length > 0) {
+        slots[slotKey] = bucketItems;
+        remaining = remaining.filter(c => !bucketItems.includes(c));
+      }
+
+      advanceTerm();
+    }
+
+    return { slots };
   };
 
   const remediation = generateRemediationPlan();

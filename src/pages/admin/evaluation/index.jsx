@@ -449,16 +449,18 @@ const normalizeSubjectCode = (code) => {
       let pipelineResult;
       if (evaluationStrategy === 'graduation') {
         pipelineResult = runGraduationEvaluation(catalog, subjectStatuses);
-      } else if (evaluationStrategy === 'transferee') {
-        pipelineResult = runTransfereeEvaluation(
-          catalog,
-          studentSubjectsHistory,
-          selectedStudentData.semester,
-          selectedStudentData.academicYear || "2026-2027",
-          minAllowedUnits,
-          maxAllowedUnits,
-          manualOverrides
-        );
+} else if (evaluationStrategy === 'transferee') {
+      pipelineResult = runTransfereeEvaluation(
+        catalog, 
+        studentSubjectsHistory, 
+        selectedStudentData.semester, 
+        selectedStudentData.academicYear || "2026-2027", 
+        minAllowedUnits,
+        maxAllowedUnits,
+        manualOverrides,
+        '', // studentTrack (unused here)
+        selectedStudentData.yearLevel
+      );
       } else if (evaluationStrategy === 'shiftee') {
         pipelineResult = runShifteeEvaluation(catalog, subjectStatuses, passedCodes, selectedStudentData, newShifteeProgram);
   } else if (evaluationStrategy === 'returning') {
@@ -522,90 +524,134 @@ const normalizeSubjectCode = (code) => {
       }
     });
 
-    // --- MULTI-TERM ROADMAP GENERATOR (RETURNING STUDENTS) ---
-    // Groups catalog subjects by their ACTUAL curriculum yearLevel + semesterOffered
-    // (e.g. "2nd Year - 1st Semester"), in curriculum order, but SKIPS any
-    // year/semester group that has zero remaining subjects (i.e. already fully
-    // completed/credited) — so the roadmap starts at wherever the student
-    // actually still has work left, not always at 1st Year.
+   // --- MULTI-TERM ROADMAP GENERATOR (RETURNING / SHIFTEE / REGULAR) ---
+    // Schedules remaining subjects into REAL, sequential semesters (never a
+    // fabricated "Part 2" of the same term). If a term is full, the overflow
+    // rolls forward into the next actual semester.
 let recommendedRoadmap = [];
-if (evaluationStrategy === 'returning' || evaluationStrategy === 'shiftee') {
-      const yearOrder = { '1st year': 1, '2nd year': 2, '3rd year': 3, '4th year': 4 };
-      const semOrder = { '1st semester': 1, '2nd semester': 2, 'summer': 3, 'mid year': 3 };
+if (['returning', 'shiftee', 'regular'].includes(evaluationStrategy)) {
+      const normalizeCatalogYearNum = (raw) => {
+        const s = String(raw || '').trim().toLowerCase();
+        if (s.includes('4th') || s.includes('fourth')) return 4;
+        if (s.includes('3rd') || s.includes('3nd') || s.includes('third')) return 3;
+        if (s.includes('2nd') || s.includes('second')) return 2;
+        return 1;
+      };
+      const normalizeCatalogSemKey = (raw) => {
+        const s = String(raw || '').trim().toLowerCase();
+        if (s.includes('sum') || s.includes('mid')) return 'summer';
+        if (s.includes('2nd') || s.includes('second')) return '2nd';
+        return '1st';
+      };
+      const YEAR_LABELS_MAP = { 1: '1st Year', 2: '2nd Year', 3: '3rd Year', 4: '4th Year' };
+      const SEM_LABELS_MAP = { '1st': '1st Semester', '2nd': '2nd Semester', 'summer': 'Summer' };
 
-      const groupsMap = new Map(); // key: "y-s" -> { yearLabel, semLabel, subjects: [] }
-
-      console.log('=== DEBUG CATALOG YEAR LEVELS ===');
-      console.log('Effective curriculum in use:', effectiveCurriculum);
-      console.log('Total catalog subjects:', catalog.length);
-      console.log('All unique yearLevel values in catalog:', JSON.stringify([...new Set(catalog.map(c => c.yearLevel))]));
-
+      const pool = [];
       catalog.forEach(course => {
         const code = getCode(course);
         const info = subjectStatuses[code] || { status: 'Not Taken' };
-        if (!retakeableStatuses.includes(info.status)) return; // skip already completed/credited
+        if (!retakeableStatuses.includes(info.status)) return;
 
-        const yearLabelRaw = String(course.yearLevel || '1st Year').trim();
-        const yearKey = yearLabelRaw.toLowerCase();
+        const yearNum = normalizeCatalogYearNum(course.yearLevel);
         const semArray = Array.isArray(course.semesterOffered) ? course.semesterOffered : [course.semesterOffered || '1st Semester'];
-        const semLabelRaw = String(semArray[0] || '1st Semester').trim();
-        const semKey = semLabelRaw.toLowerCase();
+        const offeredKeys = semArray.map(s => normalizeCatalogSemKey(s));
 
-        const groupKey = `${yearKey}__${semKey}`;
-        if (!groupsMap.has(groupKey)) {
-          groupsMap.set(groupKey, {
-            yearLabel: yearLabelRaw,
-            semLabel: semLabelRaw,
-            yearOrderVal: yearOrder[yearKey] ?? 99,
-            semOrderVal: semOrder[semKey] ?? 99,
-            subjects: []
-          });
-        }
-        groupsMap.get(groupKey).subjects.push({
+        pool.push({
           code,
           title: getTitle(course),
-          units: getUnits(course)
+          units: getUnits(course),
+          catalogYear: yearNum,
+          catalogSemKey: normalizeCatalogSemKey(semArray[0]),
+          offeredKeys
         });
       });
 
-  // Only include year/semester groups at or after the student's CURRENT
-        // assigned standing (year AND semester) — e.g. if the student is
-        // "2nd Year, 2nd Semester", skip 1st Year entirely AND skip 2nd Year's
-        // 1st Semester, starting the roadmap at 2nd Year - 2nd Semester onward.
-        const normalizeStudentYearLabel = (val) => {
-          const s = String(val || '').trim().toLowerCase();
-          if (s.includes('1st') || s.includes('first')) return 1;
-          if (s.includes('2nd') || s.includes('second')) return 2;
-          if (s.includes('3rd') || s.includes('third')) return 3;
-          if (s.includes('4th') || s.includes('fourth')) return 4;
-          if (s.includes('5th') || s.includes('fifth')) return 5;
-          return 1;
-        };
-        const normalizeStudentSemLabel = (val) => {
-          const s = String(val || '').trim().toLowerCase();
-          if (s.includes('2nd') || s.includes('second')) return 2;
-          if (s.includes('summer') || s.includes('mid')) return 3;
-          return 1;
-        };
-        const studentCurrentYearOrder = normalizeStudentYearLabel(selectedStudentData.yearLevel);
-        const studentCurrentSemOrder = normalizeStudentSemLabel(selectedStudentData.semester);
+      const normalizeStudentYearNum = (val) => {
+        const s = String(val || '').trim().toLowerCase();
+        if (s.includes('4th') || s.includes('fourth')) return 4;
+        if (s.includes('3rd') || s.includes('third')) return 3;
+        if (s.includes('2nd') || s.includes('second')) return 2;
+        return 1;
+      };
+      const normalizeStudentSemKey = (val) => {
+        const s = String(val || '').trim().toLowerCase();
+        if (s.includes('summer') || s.includes('mid')) return 'summer';
+        if (s.includes('2nd') || s.includes('second')) return '2nd';
+        return '1st';
+      };
 
-        recommendedRoadmap = Array.from(groupsMap.values())
-          .filter(g => g.subjects.length > 0)
-            .filter(g => {
-              if (g.yearOrderVal > studentCurrentYearOrder) return true;  
-              if (g.yearOrderVal === studentCurrentYearOrder) {
-                return g.semOrderVal >= studentCurrentSemOrder;            
-              }
-              return false;                                               
-            })
-          .sort((a, b) => (a.yearOrderVal - b.yearOrderVal) || (a.semOrderVal - b.semOrderVal))
-          .map(g => ({
-            term: `${g.yearLabel} - ${g.semLabel}`,
-            totalUnits: g.subjects.reduce((sum, s) => sum + s.units, 0),
-            subjects: g.subjects
-          }));
+      let curYear = normalizeStudentYearNum(selectedStudentData.yearLevel);
+      let curSemKey = normalizeStudentSemKey(selectedStudentData.semester);
+
+      const semOrderForSort = { '1st': 1, '2nd': 2, 'summer': 3 };
+      pool.sort((a, b) => {
+        const yearDiff = a.catalogYear - b.catalogYear;
+        if (yearDiff !== 0) return yearDiff;
+        return (semOrderForSort[a.catalogSemKey] || 1) - (semOrderForSort[b.catalogSemKey] || 1);
+      });
+
+      let remaining = [...pool];
+      let safetyGuard = 0;
+      const maxIterations = remaining.length * 3 + 20;
+
+      const advanceRealTerm = () => {
+        if (curSemKey === '1st') {
+          curSemKey = '2nd';
+        } else if (curSemKey === '2nd') {
+          // Only detour through Summer if something still waiting actually
+          // needs it — otherwise skip straight to next year's 1st Semester.
+          const summerNeeded = remaining.some(s => s.offeredKeys.includes('summer'));
+          curSemKey = summerNeeded ? 'summer' : '1st';
+          if (!summerNeeded) curYear += 1;
+        } else {
+          curSemKey = '1st';
+          curYear += 1;
+        }
+      };
+
+      while (remaining.length > 0 && safetyGuard < maxIterations) {
+        safetyGuard++;
+
+        const eligible = remaining.filter(s =>
+          s.offeredKeys.includes(curSemKey) && s.catalogYear <= curYear
+        );
+
+        console.log(`Term check: Year ${curYear}, Sem ${curSemKey} — eligible: ${eligible.length}, remaining total: ${remaining.length}`);
+
+        let bucketUnits = 0;
+        const bucketItems = [];
+        eligible.forEach(s => {
+          if (bucketUnits + s.units <= maxAllowedUnits) {
+            bucketItems.push(s);
+            bucketUnits += s.units;
+          }
+        });
+
+        if (bucketItems.length > 0) {
+          recommendedRoadmap.push({
+            term: `${YEAR_LABELS_MAP[curYear] || `${curYear}th Year`} - ${SEM_LABELS_MAP[curSemKey]}`,
+            totalUnits: bucketUnits,
+            subjects: bucketItems.map(s => ({ code: s.code, title: s.title, units: s.units }))
+          });
+          const placedCodes = new Set(bucketItems.map(s => s.code));
+          remaining = remaining.filter(s => !placedCodes.has(s.code));
+        }
+
+        advanceRealTerm();
+        if (curYear > 10) break;
       }
+
+      // Anything still stuck after the loop exits (e.g. a subject whose
+      // prerequisite never actually gets satisfied) gets surfaced as its
+      // own catch-all term instead of silently vanishing from the roadmap.
+      if (remaining.length > 0) {
+        recommendedRoadmap.push({
+          term: 'Unscheduled — Requires Manual Review',
+          totalUnits: remaining.reduce((sum, s) => sum + s.units, 0),
+          subjects: remaining.map(s => ({ code: s.code, title: s.title, units: s.units }))
+        });
+      }
+    }
     let warningAlerts = [...(pipelineResult.alerts || [])];
     if (simulatedLoad < minAllowedUnits && recommendedStudyPlan.length > 0) {
       warningAlerts.push(`Academic Warning: Load counter evaluates underload (${simulatedLoad} units). Minimum standard is ${minAllowedUnits} units.`);
@@ -624,7 +670,7 @@ const completionPercentage = pipelineResult.totalRequired > 0
           // Other tracks (e.g. transferee) already return a correct, fully-built
           // recommendedRoadmap from their own pipeline function (runTransfereeEvaluation,
           // etc.) — overwriting it here with the empty local variable would blank it out.
-recommendedRoadmap: (evaluationStrategy === 'returning' || evaluationStrategy === 'shiftee') ? recommendedRoadmap : (pipelineResult.recommendedRoadmap || []),
+recommendedRoadmap: ['returning', 'shiftee', 'regular'].includes(evaluationStrategy) ? recommendedRoadmap : (pipelineResult.recommendedRoadmap || []),
           simulatedLoad,
           alerts: warningAlerts,
           effectiveCurriculum,
@@ -773,7 +819,6 @@ recommendedRoadmap: (evaluationStrategy === 'returning' || evaluationStrategy ==
               </div>
             )}
 
-            {/* DYNAMIC PIPELINE TEMPLATES DIRECT MOUNT ROUTER */}
             {selectedStudentData && evaluationStrategy === 'graduation' && auditOutput && (
               <GraduationPipelineView
                 selectedStudentData={selectedStudentData}
@@ -784,6 +829,7 @@ recommendedRoadmap: (evaluationStrategy === 'returning' || evaluationStrategy ==
                 triggerReportModalOpen={handleTriggerReportModalOpen}
                 handleFinalizeEvaluationMatrix={handleFinalizeEvaluationMatrix}
                 isSubmitting={isSubmitting}
+                effectiveCurriculum={auditOutput.effectiveCurriculum}
               />
             )}
 

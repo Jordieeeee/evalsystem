@@ -1,6 +1,6 @@
 export function runGraduationEvaluation(catalog, subjectStatuses) {
   let subjectList = [], deficiencies = [], alerts = [];
-  let completed = [], missingSubjects = [];
+  let completed = [], missingSubjects = [], creditedList = [];
   let unitsEarned = 0, unitsRemaining = 0, unitsRequired = 0;
 
   // Track values for GWA Calculation
@@ -29,9 +29,10 @@ export function runGraduationEvaluation(catalog, subjectStatuses) {
       semesterOffered: course.semesterOffered || [course.semester]
     };
 
-    if (['Completed', 'Credited'].includes(info.status)) {
+if (['Completed', 'Credited'].includes(info.status)) {
       unitsEarned += unitsValue;
       completed.push(courseObj);
+      if (info.status === 'Credited') creditedList.push(courseObj);
 
       // Extract numeric grade (e.g., "1.25", "1.75", "2.0")
       const numericGrade = parseFloat(info.grade);
@@ -90,8 +91,8 @@ export function runGraduationEvaluation(catalog, subjectStatuses) {
     decisionExplanation,
     gwa: finalGwa,
     latinHonors, // Passed down to components & print previews
-    // --- SAFE FALLBACKS TO PREVENT UI CRASHES ---
-    creditedList: [],
+// --- SAFE FALLBACKS TO PREVENT UI CRASHES ---
+    creditedList,
     obsoleteList: [],
     recommendedRoadmap: []
   };

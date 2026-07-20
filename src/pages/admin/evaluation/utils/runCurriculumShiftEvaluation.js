@@ -30,7 +30,7 @@ export const TRANSFER_NO_CREDIT = 'NO_CREDIT';
 export const canonical = (code) => String(code ?? '').toUpperCase().replace(/[^A-Z0-9]/g, '');
 
 const unitsOf = (course) => {
-  const units = Number(course?.creditUnits);
+  const units = Number(course?.creditUnits ?? course?.units);
   return Number.isFinite(units) && units > 0 ? units : 0;
 };
 

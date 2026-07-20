@@ -15,6 +15,7 @@ export default function PrintReportModal({
 const isReturningReport = activeReportData.type === 'returning' || activeReportData.type === 'RETURNING';
   const isCurrShiftReport = activeReportData.type === 'curr-shift';
   const isRegularReport = activeReportData.type === 'regular' || activeReportData.type === 'REGULAR';
+  const isShifteeReport = activeReportData.type === 'shiftee' || activeReportData.type === 'SHIFTEE';
 
   return (
     <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
@@ -194,17 +195,28 @@ const isReturningReport = activeReportData.type === 'returning' || activeReportD
                     <h3 style={{ fontFamily: 'Arial, sans-serif', fontSize: '11px', fontWeight: 'bold', textTransform: 'uppercase', borderBottom: '1.5px solid #000000', paddingBottom: '3px' }}>
                       III. Analysis Logs & Rule Results
                     </h3>
-                    <div style={{ border: '1px solid #e5e7eb', borderRadius: '4px', padding: '8px', minHeight: '40px' }}>
-                      {data.alerts && data.alerts.length > 0 ? (
-                        <ul style={{ margin: '0', paddingLeft: '15px', color: '#92400e' }} className="print-academic-font-bold">
+{data.alerts && data.alerts.length > 0 ? (
+                      <table className="w-full text-left" style={{ borderCollapse: 'collapse', border: '1px solid #000000', fontSize: '10px', marginTop: '5px' }}>
+                        <thead>
+                          <tr style={{ backgroundColor: '#f3f4f6', borderBottom: '1.5px solid #000000', fontFamily: 'Arial, sans-serif', fontWeight: 'bold' }}>
+                            <th style={{ padding: '5px', width: '10%', borderRight: '1px solid #000000', textAlign: 'center' }}>No.</th>
+                            <th style={{ padding: '5px', width: '90%' }}>Rule Result / Alert Description</th>
+                          </tr>
+                        </thead>
+                        <tbody>
                           {data.alerts.map((alertText, idx) => (
-                            <li key={idx} style={{ padding: '2px 0' }}>{alertText}</li>
+                            <tr key={idx} style={{ borderBottom: '1px solid #e5e7eb' }}>
+                              <td className="print-academic-font-bold" style={{ padding: '4px 5px', borderRight: '1px solid #e5e7eb', textAlign: 'center', color: '#92400e' }}>{idx + 1}</td>
+                              <td className="print-academic-font" style={{ padding: '4px 5px', color: '#92400e' }}>{alertText}</td>
+                            </tr>
                           ))}
-                        </ul>
-                      ) : (
+                        </tbody>
+                      </table>
+                    ) : (
+                      <div style={{ border: '1px solid #e5e7eb', borderRadius: '4px', padding: '8px', minHeight: '40px' }}>
                         <p className="print-academic-font" style={{ fontStyle: 'italic', color: '#4b5563', margin: '0' }}>No outstanding flags detected.</p>
-                      )}
-                    </div>
+                      </div>
+                    )}
                   </div>
 
                   {/* Recommended Priority Plan — now rendered per labeled term,
@@ -299,9 +311,10 @@ const isReturningReport = activeReportData.type === 'returning' || activeReportD
               </>
   ) : isCurrShiftReport ? (
               <ChecksheetPrintSheet activeReportData={activeReportData} />
-            ) : isRegularReport ? (
+) : isRegularReport ? (
               /* ================= REGULAR EVALUATION REPORT ================= */
-              <div className="print-page pt-0 mt-0">
+              <>
+                <div className="print-page pt-0 mt-0">
 
                 {/* Header Letterhead */}
                 <table className="w-full border-collapse" style={{ borderBottom: '3px double #000000', paddingBottom: '12px' }}>
@@ -419,17 +432,102 @@ const isReturningReport = activeReportData.type === 'returning' || activeReportD
                   <h3 style={{ fontFamily: 'Arial, sans-serif', fontSize: '11px', fontWeight: 'bold', textTransform: 'uppercase', borderBottom: '1.5px solid #000000', paddingBottom: '3px' }}>
                     III. Academic Standing & Advancement Decision
                   </h3>
-                  <div style={{ border: '1px solid #e5e7eb', borderRadius: '4px', padding: '8px', minHeight: '40px' }}>
-                    {data.deficiencies && data.deficiencies.length > 0 ? (
-                      <ul style={{ margin: '0', paddingLeft: '15px', color: '#991b1b' }} className="print-academic-font-bold">
-                        {data.deficiencies.map((def, idx) => (
-                          <li key={idx} style={{ padding: '2px 0' }}>{def}</li>
-                        ))}
-                      </ul>
-                    ) : (
+{data.deficiencies && data.deficiencies.length > 0 ? (
+                    <table className="w-full text-left" style={{ borderCollapse: 'collapse', border: '1px solid #000000', fontSize: '10px', marginTop: '5px' }}>
+                      <thead>
+                        <tr style={{ backgroundColor: '#f3f4f6', borderBottom: '1.5px solid #000000', fontFamily: 'Arial, sans-serif', fontWeight: 'bold' }}>
+                          <th style={{ padding: '5px', width: '20%', borderRight: '1px solid #000000' }}>Course Code</th>
+                          <th style={{ padding: '5px', width: '80%' }}>Deficiency Description</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {data.deficiencies.map((def, idx) => {
+                          const codeMatch = def.match(/\[([^\]]+)\]/);
+                          const code = codeMatch ? codeMatch[1] : '—';
+                          const description = def.replace(/\s*\[[^\]]+\]\s*$/, '').trim();
+                          return (
+                            <tr key={idx} style={{ borderBottom: '1px solid #e5e7eb' }}>
+                              <td className="print-academic-font-bold" style={{ padding: '4px 5px', borderRight: '1px solid #e5e7eb', color: '#991b1b' }}>{code}</td>
+                              <td className="print-academic-font" style={{ padding: '4px 5px', color: '#991b1b' }}>{description}</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  ) : (
+                    <div style={{ border: '1px solid #e5e7eb', borderRadius: '4px', padding: '8px', minHeight: '40px' }}>
                       <p className="print-academic-font" style={{ fontStyle: 'italic', color: '#059669', margin: '0', fontWeight: 'bold' }}>
                         No deficiencies found. Student is ELIGIBLE to advance to the next term.
                       </p>
+                    </div>
+                  )}
+                </div>
+
+{/* Page Footer for Page 1 */}
+                <div style={{ marginTop: '50px', paddingTop: '10px', borderTop: '1px solid #e5e7eb', display: 'flex', justifyContent: 'space-between', fontSize: '9px', color: '#9ca3af' }}>
+                  <span>University Evaluation Report System (OREG-REGULAR-EVAL-2026)</span>
+                  <span>Page 1 of 2</span>
+                </div>
+
+              </div>
+
+              {/* Print separation gap */}
+              <div className="print-page-break"></div>
+
+              {/* ================= REGULAR REPORT PAGE 2: RECOMMENDED SEMESTER PLAN ================= */}
+              <div className="print-page pt-0 mt-0">
+
+                <div className="text-center" style={{ margin: '0 0 20px 0' }}>
+                  <h2 style={{ fontFamily: 'Arial, sans-serif', fontSize: '13px', fontWeight: 'bold', textTransform: 'uppercase', color: '#0f172a', margin: '0' }}>
+                    Recommended Course Plan & Progression Roadmap
+                  </h2>
+                  <p style={{ fontFamily: 'Georgia, serif', fontSize: '10px', fontStyle: 'italic', color: '#374151', margin: '3px 0 0 0' }}>
+                    Sequenced Course Load for Regular Student Progression
+                  </p>
+                </div>
+
+                <div style={{ marginTop: '20px' }}>
+                  <h3 style={{ fontFamily: 'Arial, sans-serif', fontSize: '11px', fontWeight: 'bold', textTransform: 'uppercase', borderBottom: '1.5px solid #000000', paddingBottom: '3px' }}>
+                    IV. Sequential Priority Plan (Recommended Enrollment Load)
+                  </h3>
+                  <p className="print-academic-font" style={{ margin: '5px 0 10px 0' }}>
+                    This recommended load prioritizes not-yet-completed subjects, sequenced by year level and semester, within the permitted credit boundary:
+                  </p>
+
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+                    {data.recommendedRoadmap && data.recommendedRoadmap.length > 0 ? (
+                      data.recommendedRoadmap.map((term, index) => (
+                        <div key={index} style={{ border: '1px solid #000000', borderRadius: '4px', overflow: 'hidden' }}>
+                          <div style={{ backgroundColor: '#f3f4f6', padding: '6px', borderBottom: '1px solid #000000', fontSize: '9px', fontWeight: 'bold', textTransform: 'uppercase', display: 'flex', justifyContent: 'space-between' }}>
+                            <span>{term.term}</span>
+                            <span>Load: {term.totalUnits} Units</span>
+                          </div>
+                          <table className="w-full text-left" style={{ borderCollapse: 'collapse', fontSize: '10px' }}>
+                            <thead>
+                              <tr style={{ borderBottom: '1px solid #e5e7eb', backgroundColor: '#fafafa', color: '#4b5563' }}>
+                                <th style={{ padding: '4px 8px', width: '20%' }}>Course Code</th>
+                                <th style={{ padding: '4px 8px', width: '65%' }}>Course Title Description</th>
+                                <th style={{ padding: '4px 8px', width: '15%', textAlign: 'right' }}>Units</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {term.subjects.map((s) => (
+                                <tr key={s.code} style={{ borderBottom: '1px solid #e5e7eb' }}>
+                                  <td className="print-academic-font-bold" style={{ padding: '4px 8px' }}>{s.code}</td>
+                                  <td className="print-academic-font" style={{ padding: '4px 8px' }}>{s.title}</td>
+                                  <td className="print-academic-font-bold" style={{ padding: '4px 8px', textAlign: 'right' }}>{s.units} u</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      ))
+                    ) : (
+                      <div style={{ border: '1px solid #000000', borderRadius: '4px', padding: '10px' }}>
+                        <p className="print-academic-font" style={{ fontStyle: 'italic', color: '#6b7280', margin: '0', textAlign: 'center' }}>
+                          No subjects could be scheduled for the upcoming term.
+                        </p>
+                      </div>
                     )}
                   </div>
                 </div>
@@ -467,13 +565,827 @@ const isReturningReport = activeReportData.type === 'returning' || activeReportD
                   </table>
                 </div>
 
-                {/* Page Footer */}
+{/* Page Footer */}
                 <div style={{ marginTop: '40px', paddingTop: '10px', borderTop: '1px solid #e5e7eb', display: 'flex', justifyContent: 'space-between', fontSize: '9px', color: '#9ca3af' }}>
                   <span>University Evaluation Report System (OREG-REGULAR-EVAL-2026)</span>
-                  <span>Page 1 of 1</span>
+                  <span>Page 2 of 2</span>
                 </div>
 
               </div>
+              </>
+            ) : isShifteeReport ? (
+              /* ================= SHIFTEE EVALUATION REPORT ================= */
+              <>
+                <div className="print-page pt-0 mt-0">
+
+                  {/* Header Letterhead */}
+                  <table className="w-full border-collapse" style={{ borderBottom: '3px double #000000', paddingBottom: '12px' }}>
+                    <tbody>
+                      <tr>
+                        <td style={{ width: '85px', verticalAlign: 'middle', paddingBottom: '12px' }}>
+                          <img src={schoolLogo} alt="School Logo" style={{ width: '75px', height: '75px', objectFit: 'contain' }} />
+                        </td>
+                        <td className="text-left" style={{ paddingLeft: '15px', verticalAlign: 'middle', paddingBottom: '12px' }}>
+                          <h1 style={{ fontFamily: 'Arial, sans-serif', fontSize: '18px', fontWeight: 'bold', margin: '0', textTransform: 'uppercase' }}>
+                            The Last Salle University
+                          </h1>
+                          <p style={{ fontFamily: 'Arial, sans-serif', fontSize: '11px', fontWeight: 'bold', color: '#374151', textTransform: 'uppercase', margin: '2px 0 0 0' }}>
+                            Office of the University Registrar
+                          </p>
+                          <p style={{ fontFamily: 'Arial, sans-serif', fontSize: '9px', color: '#6b7280', margin: '1px 0 0 0' }}>
+                            Brgy. San Jose, Lipa City, Batangas, Philippines
+                          </p>
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+
+                  {/* Title Block */}
+                  <div className="text-center" style={{ margin: '15px 0 10px 0' }}>
+                    <h2 style={{ fontFamily: 'Arial, sans-serif', fontSize: '13px', fontWeight: 'bold', textTransform: 'uppercase', color: '#0f172a', margin: '0' }}>
+                      Shiftee Program Transition Evaluation Report
+                    </h2>
+                    <p style={{ fontFamily: 'Georgia, serif', fontSize: '10px', fontStyle: 'italic', color: '#374151', margin: '3px 0 0 0' }}>
+                      Document Code Reference: OREG-SHIFT-EVAL-2026
+                    </p>
+                  </div>
+
+                  {/* Profile Table */}
+                  <table className="w-full text-xs" style={{ borderCollapse: 'collapse', fontFamily: 'Arial, sans-serif', margin: '10px 0' }}>
+                    <tbody>
+                      <tr style={{ borderBottom: '1px solid #e5e7eb' }}>
+                        <td style={{ padding: '5px 0', fontWeight: 'bold', color: '#4b5563', textTransform: 'uppercase', fontSize: '9px', width: '25%' }}>Student Name:</td>
+                        <td className="print-academic-font-bold" style={{ padding: '5px 0', color: '#000000', textTransform: 'uppercase' }}>{activeReportData.name}</td>
+                        <td style={{ padding: '5px 0', fontWeight: 'bold', color: '#4b5563', textTransform: 'uppercase', fontSize: '9px', width: '25%' }}>Student ID No:</td>
+                        <td className="print-academic-font-bold" style={{ padding: '5px 0', color: '#000000' }}>{activeReportData.studentId}</td>
+                      </tr>
+                      <tr style={{ borderBottom: '1px solid #e5e7eb' }}>
+                        <td style={{ padding: '5px 0', fontWeight: 'bold', color: '#4b5563', textTransform: 'uppercase', fontSize: '9px' }}>Previous Program:</td>
+                        <td className="print-academic-font-bold" style={{ padding: '5px 0', color: '#000000' }}>{activeReportData.prevProgram}</td>
+                        <td style={{ padding: '5px 0', fontWeight: 'bold', color: '#4b5563', textTransform: 'uppercase', fontSize: '9px' }}>New Program:</td>
+                        <td className="print-academic-font-bold" style={{ padding: '5px 0', color: '#000000' }}>{activeReportData.newProgram || 'N/A'}</td>
+                      </tr>
+                      <tr style={{ borderBottom: '1px solid #e5e7eb' }}>
+                        <td style={{ padding: '5px 0', fontWeight: 'bold', color: '#4b5563', textTransform: 'uppercase', fontSize: '9px' }}>Assigned Curriculum:</td>
+                        <td className="print-academic-font-bold" style={{ padding: '5px 0', color: '#000000' }}>{activeReportData.curriculum} Framework</td>
+                        <td style={{ padding: '5px 0', fontWeight: 'bold', color: '#4b5563', textTransform: 'uppercase', fontSize: '9px' }}>Evaluation Date:</td>
+                        <td className="print-academic-font-bold" style={{ padding: '5px 0', color: '#000000' }}>{currentTimestamp}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+
+                  {/* Summary Metrics */}
+                  <div style={{ marginTop: '15px' }}>
+                    <h3 style={{ fontFamily: 'Arial, sans-serif', fontSize: '11px', fontWeight: 'bold', textTransform: 'uppercase', borderBottom: '1.5px solid #000000', paddingBottom: '3px' }}>
+                      I. Program Transition Progress Summary
+                    </h3>
+                    <p className="print-academic-font" style={{ margin: '5px 0 10px 0' }}>
+                      Following cross-credit evaluation against the new program's curriculum requirements, the student's current standing is compiled below:
+                    </p>
+                    <table className="w-full text-center" style={{ borderCollapse: 'collapse', fontSize: '10px', border: '1px solid #d1d5db' }}>
+                      <thead>
+                        <tr style={{ backgroundColor: '#f9fafb', borderBottom: '1px solid #d1d5db', fontFamily: 'Arial, sans-serif', fontWeight: 'bold' }}>
+                          <th style={{ padding: '5px', borderRight: '1px solid #d1d5db' }}>Units Earned</th>
+                          <th style={{ padding: '5px', borderRight: '1px solid #d1d5db' }}>Units Remaining</th>
+                          <th style={{ padding: '5px', borderRight: '1px solid #d1d5db' }}>Total Required Units</th>
+                          <th style={{ padding: '5px' }}>Completion Progress</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr className="print-academic-font-bold" style={{ textAlign: 'center' }}>
+                          <td style={{ padding: '5px', borderRight: '1px solid #d1d5db', color: '#059669' }}>{data.unitsEarned || 0} Units</td>
+                          <td style={{ padding: '5px', borderRight: '1px solid #d1d5db', color: '#dc2626' }}>{data.unitsRemaining || 0} Units</td>
+                          <td style={{ padding: '5px', borderRight: '1px solid #d1d5db' }}>{data.totalRequired || 0} Units</td>
+                          <td style={{ padding: '5px', color: '#2563eb' }}>{data.completionPercentage}%</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Credited Subjects */}
+                  <div style={{ marginTop: '20px' }}>
+                    <h3 style={{ fontFamily: 'Arial, sans-serif', fontSize: '11px', fontWeight: 'bold', textTransform: 'uppercase', borderBottom: '1.5px solid #000000', paddingBottom: '3px' }}>
+                      II. Cross-Credited Subjects
+                    </h3>
+                    <table className="w-full text-left" style={{ borderCollapse: 'collapse', border: '1px solid #000000', fontSize: '10px', marginTop: '5px' }}>
+                      <thead>
+                        <tr style={{ backgroundColor: '#f3f4f6', borderBottom: '1.5px solid #000000', fontFamily: 'Arial, sans-serif', fontWeight: 'bold' }}>
+                          <th style={{ padding: '5px', width: '20%', borderRight: '1px solid #000000' }}>Subject Code</th>
+                          <th style={{ padding: '5px', width: '45%', borderRight: '1px solid #000000' }}>Subject Description Title</th>
+                          <th style={{ padding: '5px', width: '15%', borderRight: '1px solid #000000', textAlign: 'center' }}>Units</th>
+                          <th style={{ padding: '5px', width: '10%', borderRight: '1px solid #000000', textAlign: 'center' }}>Grade</th>
+                          <th style={{ padding: '5px', width: '10%', textAlign: 'center' }}>Status</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {data.creditedList && data.creditedList.length > 0 ? (
+                          data.creditedList.map((s, idx) => (
+                            <tr key={idx} style={{ borderBottom: '1px solid #e5e7eb' }}>
+                              <td className="print-academic-font-bold" style={{ padding: '4px 5px', borderRight: '1px solid #e5e7eb' }}>{s.code}</td>
+                              <td className="print-academic-font" style={{ padding: '4px 5px', borderRight: '1px solid #e5e7eb' }}>{s.title}</td>
+                              <td className="print-academic-font" style={{ padding: '4px 5px', borderRight: '1px solid #e5e7eb', textAlign: 'center' }}>{s.units}</td>
+                              <td className="print-academic-font-bold" style={{ padding: '4px 5px', borderRight: '1px solid #e5e7eb', textAlign: 'center' }}>{s.grade}</td>
+                              <td className="print-academic-font-bold" style={{ padding: '4px 5px', textAlign: 'center', color: '#059669' }}>{s.status}</td>
+                            </tr>
+                          ))
+                        ) : (
+                          <tr>
+                            <td colSpan="5" className="print-academic-font" style={{ padding: '10px', textAlign: 'center', fontStyle: 'italic', color: '#6b7280' }}>No cross-credited subjects recorded.</td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Page Footer */}
+                  <div style={{ marginTop: '50px', paddingTop: '10px', borderTop: '1px solid #e5e7eb', display: 'flex', justifyContent: 'space-between', fontSize: '9px', color: '#9ca3af' }}>
+                    <span>University Evaluation Report System (OREG-SHIFT-EVAL-2026)</span>
+                    <span>Page 1 of 2</span>
+                  </div>
+
+                </div>
+
+                {/* Print separation gap */}
+                <div className="print-page-break"></div>
+
+                {/* ================= SHIFTEE REPORT PAGE 2: RECOMMENDED STUDY PLAN ================= */}
+                <div className="print-page pt-0 mt-0">
+
+                  <div className="text-center" style={{ margin: '0 0 20px 0' }}>
+                    <h2 style={{ fontFamily: 'Arial, sans-serif', fontSize: '13px', fontWeight: 'bold', textTransform: 'uppercase', color: '#0f172a', margin: '0' }}>
+                      Recommended Course Plan & Progression Roadmap
+                    </h2>
+                    <p style={{ fontFamily: 'Georgia, serif', fontSize: '10px', fontStyle: 'italic', color: '#374151', margin: '3px 0 0 0' }}>
+                      Sequenced Course Load for Shiftee Program Transition
+                    </p>
+                  </div>
+
+                  {/* Deficiencies */}
+                  <div>
+                    <h3 style={{ fontFamily: 'Arial, sans-serif', fontSize: '11px', fontWeight: 'bold', textTransform: 'uppercase', borderBottom: '1.5px solid #000000', paddingBottom: '3px' }}>
+                      III. Academic Standing & Deficiencies
+                    </h3>
+                    {data.deficiencies && data.deficiencies.length > 0 ? (
+                      <table className="w-full text-left" style={{ borderCollapse: 'collapse', border: '1px solid #000000', fontSize: '10px', marginTop: '5px' }}>
+                        <thead>
+                          <tr style={{ backgroundColor: '#f3f4f6', borderBottom: '1.5px solid #000000', fontFamily: 'Arial, sans-serif', fontWeight: 'bold' }}>
+                            <th style={{ padding: '5px', width: '20%', borderRight: '1px solid #000000' }}>Course Code</th>
+                            <th style={{ padding: '5px', width: '80%' }}>Deficiency Description</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {data.deficiencies.map((def, idx) => {
+                            const codeMatch = def.match(/\[([^\]]+)\]/);
+                            const code = codeMatch ? codeMatch[1] : '—';
+                            const description = def.replace(/\s*\[[^\]]+\]\s*$/, '').trim();
+                            return (
+                              <tr key={idx} style={{ borderBottom: '1px solid #e5e7eb' }}>
+                                <td className="print-academic-font-bold" style={{ padding: '4px 5px', borderRight: '1px solid #e5e7eb', color: '#991b1b' }}>{code}</td>
+                                <td className="print-academic-font" style={{ padding: '4px 5px', color: '#991b1b' }}>{description}</td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    ) : (
+                      <div style={{ border: '1px solid #e5e7eb', borderRadius: '4px', padding: '8px', minHeight: '40px' }}>
+                        <p className="print-academic-font" style={{ fontStyle: 'italic', color: '#059669', margin: '0', fontWeight: 'bold' }}>
+                          No deficiencies found. Student is cleared for standard progressions.
+                        </p>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Recommended Semester Plan */}
+                  <div style={{ marginTop: '20px' }}>
+                    <h3 style={{ fontFamily: 'Arial, sans-serif', fontSize: '11px', fontWeight: 'bold', textTransform: 'uppercase', borderBottom: '1.5px solid #000000', paddingBottom: '3px' }}>
+                      IV. Sequential Priority Plan (Recommended Enrollment Load)
+                    </h3>
+                    <p className="print-academic-font" style={{ margin: '5px 0 10px 0' }}>
+                      This recommended load prioritizes not-yet-completed subjects under the new program, sequenced by year level and semester, within the permitted credit boundary:
+                    </p>
+
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+                      {data.recommendedRoadmap && data.recommendedRoadmap.length > 0 ? (
+                        data.recommendedRoadmap.map((term, index) => (
+                          <div key={index} style={{ border: '1px solid #000000', borderRadius: '4px', overflow: 'hidden' }}>
+                            <div style={{ backgroundColor: '#f3f4f6', padding: '6px', borderBottom: '1px solid #000000', fontSize: '9px', fontWeight: 'bold', textTransform: 'uppercase', display: 'flex', justifyContent: 'space-between' }}>
+                              <span>{term.term}</span>
+                              <span>Load: {term.totalUnits} Units</span>
+                            </div>
+                            <table className="w-full text-left" style={{ borderCollapse: 'collapse', fontSize: '10px' }}>
+                              <thead>
+                                <tr style={{ borderBottom: '1px solid #e5e7eb', backgroundColor: '#fafafa', color: '#4b5563' }}>
+                                  <th style={{ padding: '4px 8px', width: '20%' }}>Course Code</th>
+                                  <th style={{ padding: '4px 8px', width: '65%' }}>Course Title Description</th>
+                                  <th style={{ padding: '4px 8px', width: '15%', textAlign: 'right' }}>Units</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {term.subjects.map((s) => (
+                                  <tr key={s.code} style={{ borderBottom: '1px solid #e5e7eb' }}>
+                                    <td className="print-academic-font-bold" style={{ padding: '4px 8px' }}>{s.code}</td>
+                                    <td className="print-academic-font" style={{ padding: '4px 8px' }}>{s.title}</td>
+                                    <td className="print-academic-font-bold" style={{ padding: '4px 8px', textAlign: 'right' }}>{s.units} u</td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        ))
+                      ) : (
+                        <div style={{ border: '1px solid #000000', borderRadius: '4px', padding: '10px' }}>
+                          <p className="print-academic-font" style={{ fontStyle: 'italic', color: '#6b7280', margin: '0', textAlign: 'center' }}>
+                            No subjects could be scheduled for the upcoming term.
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Verification & Sign-off Block */}
+                  <div style={{ marginTop: '35px' }}>
+                    <table className="w-full" style={{ borderCollapse: 'collapse', fontSize: '11px', fontWeight: 'bold' }}>
+                      <tbody>
+                        <tr>
+                          <td style={{ width: '45%', textAlign: 'left', verticalAlign: 'top' }}>
+                            <div style={{ height: '40px' }}></div>
+                            <div style={{ borderTop: '1px solid #000000', paddingTop: '4px', width: '220px' }}>
+                              <p className="print-academic-font-bold" style={{ margin: '0', textTransform: 'uppercase' }}>
+                                Authorized Registrar Officer
+                              </p>
+                              <p style={{ margin: '2px 0 0 0', fontSize: '9px', color: '#4b5563', fontWeight: 'normal' }}>
+                                Office of the University Registrar
+                              </p>
+                            </div>
+                          </td>
+                          <td style={{ width: '10%' }}></td>
+                          <td style={{ width: '45%', textAlign: 'left', verticalAlign: 'top' }}>
+                            <div style={{ height: '40px' }}></div>
+                            <div style={{ borderTop: '1px solid #000000', paddingTop: '4px', width: '220px' }}>
+                              <p className="print-academic-font-bold" style={{ margin: '0', textTransform: 'uppercase' }}>
+                                {activeReportData.name}
+                              </p>
+                              <p style={{ margin: '2px 0 0 0', fontSize: '9px', color: '#4b5563', fontWeight: 'normal' }}>
+                                Shiftee Candidate Acknowledgment
+                              </p>
+                            </div>
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Page Footer */}
+                  <div style={{ marginTop: '40px', paddingTop: '10px', borderTop: '1px solid #e5e7eb', display: 'flex', justifyContent: 'space-between', fontSize: '9px', color: '#9ca3af' }}>
+                    <span>University Evaluation Report System (OREG-SHIFT-EVAL-2026)</span>
+                    <span>Page 2 of 2</span>
+                  </div>
+
+                </div>
+              </>
+            ) : isShifteeReport ? (
+              /* ================= SHIFTEE EVALUATION REPORT ================= */
+              <>
+                <div className="print-page pt-0 mt-0">
+
+                  {/* Header Letterhead */}
+                  <table className="w-full border-collapse" style={{ borderBottom: '3px double #000000', paddingBottom: '12px' }}>
+                    <tbody>
+                      <tr>
+                        <td style={{ width: '85px', verticalAlign: 'middle', paddingBottom: '12px' }}>
+                          <img src={schoolLogo} alt="School Logo" style={{ width: '75px', height: '75px', objectFit: 'contain' }} />
+                        </td>
+                        <td className="text-left" style={{ paddingLeft: '15px', verticalAlign: 'middle', paddingBottom: '12px' }}>
+                          <h1 style={{ fontFamily: 'Arial, sans-serif', fontSize: '18px', fontWeight: 'bold', margin: '0', textTransform: 'uppercase' }}>
+                            The Last Salle University
+                          </h1>
+                          <p style={{ fontFamily: 'Arial, sans-serif', fontSize: '11px', fontWeight: 'bold', color: '#374151', textTransform: 'uppercase', margin: '2px 0 0 0' }}>
+                            Office of the University Registrar
+                          </p>
+                          <p style={{ fontFamily: 'Arial, sans-serif', fontSize: '9px', color: '#6b7280', margin: '1px 0 0 0' }}>
+                            Brgy. San Jose, Lipa City, Batangas, Philippines
+                          </p>
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+
+                  {/* Title Block */}
+                  <div className="text-center" style={{ margin: '15px 0 10px 0' }}>
+                    <h2 style={{ fontFamily: 'Arial, sans-serif', fontSize: '13px', fontWeight: 'bold', textTransform: 'uppercase', color: '#0f172a', margin: '0' }}>
+                      Shiftee Program Transition Evaluation Report
+                    </h2>
+                    <p style={{ fontFamily: 'Georgia, serif', fontSize: '10px', fontStyle: 'italic', color: '#374151', margin: '3px 0 0 0' }}>
+                      Document Code Reference: OREG-SHIFT-EVAL-2026
+                    </p>
+                  </div>
+
+                  {/* Profile Table */}
+                  <table className="w-full text-xs" style={{ borderCollapse: 'collapse', fontFamily: 'Arial, sans-serif', margin: '10px 0' }}>
+                    <tbody>
+                      <tr style={{ borderBottom: '1px solid #e5e7eb' }}>
+                        <td style={{ padding: '5px 0', fontWeight: 'bold', color: '#4b5563', textTransform: 'uppercase', fontSize: '9px', width: '25%' }}>Student Name:</td>
+                        <td className="print-academic-font-bold" style={{ padding: '5px 0', color: '#000000', textTransform: 'uppercase' }}>{activeReportData.name}</td>
+                        <td style={{ padding: '5px 0', fontWeight: 'bold', color: '#4b5563', textTransform: 'uppercase', fontSize: '9px', width: '25%' }}>Student ID No:</td>
+                        <td className="print-academic-font-bold" style={{ padding: '5px 0', color: '#000000' }}>{activeReportData.studentId}</td>
+                      </tr>
+                      <tr style={{ borderBottom: '1px solid #e5e7eb' }}>
+                        <td style={{ padding: '5px 0', fontWeight: 'bold', color: '#4b5563', textTransform: 'uppercase', fontSize: '9px' }}>Previous Program:</td>
+                        <td className="print-academic-font-bold" style={{ padding: '5px 0', color: '#000000' }}>{activeReportData.prevProgram}</td>
+                        <td style={{ padding: '5px 0', fontWeight: 'bold', color: '#4b5563', textTransform: 'uppercase', fontSize: '9px' }}>New Program:</td>
+                        <td className="print-academic-font-bold" style={{ padding: '5px 0', color: '#000000' }}>{activeReportData.newProgram || 'N/A'}</td>
+                      </tr>
+                      <tr style={{ borderBottom: '1px solid #e5e7eb' }}>
+                        <td style={{ padding: '5px 0', fontWeight: 'bold', color: '#4b5563', textTransform: 'uppercase', fontSize: '9px' }}>Assigned Curriculum:</td>
+                        <td className="print-academic-font-bold" style={{ padding: '5px 0', color: '#000000' }}>{activeReportData.curriculum} Framework</td>
+                        <td style={{ padding: '5px 0', fontWeight: 'bold', color: '#4b5563', textTransform: 'uppercase', fontSize: '9px' }}>Evaluation Date:</td>
+                        <td className="print-academic-font-bold" style={{ padding: '5px 0', color: '#000000' }}>{currentTimestamp}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+
+                  {/* Summary Metrics */}
+                  <div style={{ marginTop: '15px' }}>
+                    <h3 style={{ fontFamily: 'Arial, sans-serif', fontSize: '11px', fontWeight: 'bold', textTransform: 'uppercase', borderBottom: '1.5px solid #000000', paddingBottom: '3px' }}>
+                      I. Program Transition Progress Summary
+                    </h3>
+                    <p className="print-academic-font" style={{ margin: '5px 0 10px 0' }}>
+                      Following cross-credit evaluation against the new program's curriculum requirements, the student's current standing is compiled below:
+                    </p>
+                    <table className="w-full text-center" style={{ borderCollapse: 'collapse', fontSize: '10px', border: '1px solid #d1d5db' }}>
+                      <thead>
+                        <tr style={{ backgroundColor: '#f9fafb', borderBottom: '1px solid #d1d5db', fontFamily: 'Arial, sans-serif', fontWeight: 'bold' }}>
+                          <th style={{ padding: '5px', borderRight: '1px solid #d1d5db' }}>Units Earned</th>
+                          <th style={{ padding: '5px', borderRight: '1px solid #d1d5db' }}>Units Remaining</th>
+                          <th style={{ padding: '5px', borderRight: '1px solid #d1d5db' }}>Total Required Units</th>
+                          <th style={{ padding: '5px' }}>Completion Progress</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr className="print-academic-font-bold" style={{ textAlign: 'center' }}>
+                          <td style={{ padding: '5px', borderRight: '1px solid #d1d5db', color: '#059669' }}>{data.unitsEarned || 0} Units</td>
+                          <td style={{ padding: '5px', borderRight: '1px solid #d1d5db', color: '#dc2626' }}>{data.unitsRemaining || 0} Units</td>
+                          <td style={{ padding: '5px', borderRight: '1px solid #d1d5db' }}>{data.totalRequired || 0} Units</td>
+                          <td style={{ padding: '5px', color: '#2563eb' }}>{data.completionPercentage}%</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Credited Subjects */}
+                  <div style={{ marginTop: '20px' }}>
+                    <h3 style={{ fontFamily: 'Arial, sans-serif', fontSize: '11px', fontWeight: 'bold', textTransform: 'uppercase', borderBottom: '1.5px solid #000000', paddingBottom: '3px' }}>
+                      II. Cross-Credited Subjects
+                    </h3>
+                    <table className="w-full text-left" style={{ borderCollapse: 'collapse', border: '1px solid #000000', fontSize: '10px', marginTop: '5px' }}>
+                      <thead>
+                        <tr style={{ backgroundColor: '#f3f4f6', borderBottom: '1.5px solid #000000', fontFamily: 'Arial, sans-serif', fontWeight: 'bold' }}>
+                          <th style={{ padding: '5px', width: '20%', borderRight: '1px solid #000000' }}>Subject Code</th>
+                          <th style={{ padding: '5px', width: '45%', borderRight: '1px solid #000000' }}>Subject Description Title</th>
+                          <th style={{ padding: '5px', width: '15%', borderRight: '1px solid #000000', textAlign: 'center' }}>Units</th>
+                          <th style={{ padding: '5px', width: '10%', borderRight: '1px solid #000000', textAlign: 'center' }}>Grade</th>
+                          <th style={{ padding: '5px', width: '10%', textAlign: 'center' }}>Status</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {data.creditedList && data.creditedList.length > 0 ? (
+                          data.creditedList.map((s, idx) => (
+                            <tr key={idx} style={{ borderBottom: '1px solid #e5e7eb' }}>
+                              <td className="print-academic-font-bold" style={{ padding: '4px 5px', borderRight: '1px solid #e5e7eb' }}>{s.code}</td>
+                              <td className="print-academic-font" style={{ padding: '4px 5px', borderRight: '1px solid #e5e7eb' }}>{s.title}</td>
+                              <td className="print-academic-font" style={{ padding: '4px 5px', borderRight: '1px solid #e5e7eb', textAlign: 'center' }}>{s.units}</td>
+                              <td className="print-academic-font-bold" style={{ padding: '4px 5px', borderRight: '1px solid #e5e7eb', textAlign: 'center' }}>{s.grade}</td>
+                              <td className="print-academic-font-bold" style={{ padding: '4px 5px', textAlign: 'center', color: '#059669' }}>{s.status}</td>
+                            </tr>
+                          ))
+                        ) : (
+                          <tr>
+                            <td colSpan="5" className="print-academic-font" style={{ padding: '10px', textAlign: 'center', fontStyle: 'italic', color: '#6b7280' }}>No cross-credited subjects recorded.</td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Page Footer */}
+                  <div style={{ marginTop: '50px', paddingTop: '10px', borderTop: '1px solid #e5e7eb', display: 'flex', justifyContent: 'space-between', fontSize: '9px', color: '#9ca3af' }}>
+                    <span>University Evaluation Report System (OREG-SHIFT-EVAL-2026)</span>
+                    <span>Page 1 of 2</span>
+                  </div>
+
+                </div>
+
+                {/* Print separation gap */}
+                <div className="print-page-break"></div>
+
+                {/* ================= SHIFTEE REPORT PAGE 2: RECOMMENDED STUDY PLAN ================= */}
+                <div className="print-page pt-0 mt-0">
+
+                  <div className="text-center" style={{ margin: '0 0 20px 0' }}>
+                    <h2 style={{ fontFamily: 'Arial, sans-serif', fontSize: '13px', fontWeight: 'bold', textTransform: 'uppercase', color: '#0f172a', margin: '0' }}>
+                      Recommended Course Plan & Progression Roadmap
+                    </h2>
+                    <p style={{ fontFamily: 'Georgia, serif', fontSize: '10px', fontStyle: 'italic', color: '#374151', margin: '3px 0 0 0' }}>
+                      Sequenced Course Load for Shiftee Program Transition
+                    </p>
+                  </div>
+
+                  {/* Deficiencies */}
+                  <div>
+                    <h3 style={{ fontFamily: 'Arial, sans-serif', fontSize: '11px', fontWeight: 'bold', textTransform: 'uppercase', borderBottom: '1.5px solid #000000', paddingBottom: '3px' }}>
+                      III. Academic Standing & Deficiencies
+                    </h3>
+                    {data.deficiencies && data.deficiencies.length > 0 ? (
+                      <table className="w-full text-left" style={{ borderCollapse: 'collapse', border: '1px solid #000000', fontSize: '10px', marginTop: '5px' }}>
+                        <thead>
+                          <tr style={{ backgroundColor: '#f3f4f6', borderBottom: '1.5px solid #000000', fontFamily: 'Arial, sans-serif', fontWeight: 'bold' }}>
+                            <th style={{ padding: '5px', width: '20%', borderRight: '1px solid #000000' }}>Course Code</th>
+                            <th style={{ padding: '5px', width: '80%' }}>Deficiency Description</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {data.deficiencies.map((def, idx) => {
+                            const codeMatch = def.match(/\[([^\]]+)\]/);
+                            const code = codeMatch ? codeMatch[1] : '—';
+                            const description = def.replace(/\s*\[[^\]]+\]\s*$/, '').trim();
+                            return (
+                              <tr key={idx} style={{ borderBottom: '1px solid #e5e7eb' }}>
+                                <td className="print-academic-font-bold" style={{ padding: '4px 5px', borderRight: '1px solid #e5e7eb', color: '#991b1b' }}>{code}</td>
+                                <td className="print-academic-font" style={{ padding: '4px 5px', color: '#991b1b' }}>{description}</td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    ) : (
+                      <div style={{ border: '1px solid #e5e7eb', borderRadius: '4px', padding: '8px', minHeight: '40px' }}>
+                        <p className="print-academic-font" style={{ fontStyle: 'italic', color: '#059669', margin: '0', fontWeight: 'bold' }}>
+                          No deficiencies found. Student is cleared for standard progressions.
+                        </p>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Recommended Semester Plan */}
+                  <div style={{ marginTop: '20px' }}>
+                    <h3 style={{ fontFamily: 'Arial, sans-serif', fontSize: '11px', fontWeight: 'bold', textTransform: 'uppercase', borderBottom: '1.5px solid #000000', paddingBottom: '3px' }}>
+                      IV. Sequential Priority Plan (Recommended Enrollment Load)
+                    </h3>
+                    <p className="print-academic-font" style={{ margin: '5px 0 10px 0' }}>
+                      This recommended load prioritizes not-yet-completed subjects under the new program, sequenced by year level and semester, within the permitted credit boundary:
+                    </p>
+
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+                      {data.recommendedRoadmap && data.recommendedRoadmap.length > 0 ? (
+                        data.recommendedRoadmap.map((term, index) => (
+                          <div key={index} style={{ border: '1px solid #000000', borderRadius: '4px', overflow: 'hidden' }}>
+                            <div style={{ backgroundColor: '#f3f4f6', padding: '6px', borderBottom: '1px solid #000000', fontSize: '9px', fontWeight: 'bold', textTransform: 'uppercase', display: 'flex', justifyContent: 'space-between' }}>
+                              <span>{term.term}</span>
+                              <span>Load: {term.totalUnits} Units</span>
+                            </div>
+                            <table className="w-full text-left" style={{ borderCollapse: 'collapse', fontSize: '10px' }}>
+                              <thead>
+                                <tr style={{ borderBottom: '1px solid #e5e7eb', backgroundColor: '#fafafa', color: '#4b5563' }}>
+                                  <th style={{ padding: '4px 8px', width: '20%' }}>Course Code</th>
+                                  <th style={{ padding: '4px 8px', width: '65%' }}>Course Title Description</th>
+                                  <th style={{ padding: '4px 8px', width: '15%', textAlign: 'right' }}>Units</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {term.subjects.map((s) => (
+                                  <tr key={s.code} style={{ borderBottom: '1px solid #e5e7eb' }}>
+                                    <td className="print-academic-font-bold" style={{ padding: '4px 8px' }}>{s.code}</td>
+                                    <td className="print-academic-font" style={{ padding: '4px 8px' }}>{s.title}</td>
+                                    <td className="print-academic-font-bold" style={{ padding: '4px 8px', textAlign: 'right' }}>{s.units} u</td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        ))
+                      ) : (
+                        <div style={{ border: '1px solid #000000', borderRadius: '4px', padding: '10px' }}>
+                          <p className="print-academic-font" style={{ fontStyle: 'italic', color: '#6b7280', margin: '0', textAlign: 'center' }}>
+                            No subjects could be scheduled for the upcoming term.
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Verification & Sign-off Block */}
+                  <div style={{ marginTop: '35px' }}>
+                    <table className="w-full" style={{ borderCollapse: 'collapse', fontSize: '11px', fontWeight: 'bold' }}>
+                      <tbody>
+                        <tr>
+                          <td style={{ width: '45%', textAlign: 'left', verticalAlign: 'top' }}>
+                            <div style={{ height: '40px' }}></div>
+                            <div style={{ borderTop: '1px solid #000000', paddingTop: '4px', width: '220px' }}>
+                              <p className="print-academic-font-bold" style={{ margin: '0', textTransform: 'uppercase' }}>
+                                Authorized Registrar Officer
+                              </p>
+                              <p style={{ margin: '2px 0 0 0', fontSize: '9px', color: '#4b5563', fontWeight: 'normal' }}>
+                                Office of the University Registrar
+                              </p>
+                            </div>
+                          </td>
+                          <td style={{ width: '10%' }}></td>
+                          <td style={{ width: '45%', textAlign: 'left', verticalAlign: 'top' }}>
+                            <div style={{ height: '40px' }}></div>
+                            <div style={{ borderTop: '1px solid #000000', paddingTop: '4px', width: '220px' }}>
+                              <p className="print-academic-font-bold" style={{ margin: '0', textTransform: 'uppercase' }}>
+                                {activeReportData.name}
+                              </p>
+                              <p style={{ margin: '2px 0 0 0', fontSize: '9px', color: '#4b5563', fontWeight: 'normal' }}>
+                                Shiftee Candidate Acknowledgment
+                              </p>
+                            </div>
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Page Footer */}
+                  <div style={{ marginTop: '40px', paddingTop: '10px', borderTop: '1px solid #e5e7eb', display: 'flex', justifyContent: 'space-between', fontSize: '9px', color: '#9ca3af' }}>
+                    <span>University Evaluation Report System (OREG-SHIFT-EVAL-2026)</span>
+                    <span>Page 2 of 2</span>
+                  </div>
+
+                </div>
+              </>
+            ) : isShifteeReport ? (
+              /* ================= SHIFTEE EVALUATION REPORT ================= */
+              <>
+                <div className="print-page pt-0 mt-0">
+
+                  {/* Header Letterhead */}
+                  <table className="w-full border-collapse" style={{ borderBottom: '3px double #000000', paddingBottom: '12px' }}>
+                    <tbody>
+                      <tr>
+                        <td style={{ width: '85px', verticalAlign: 'middle', paddingBottom: '12px' }}>
+                          <img src={schoolLogo} alt="School Logo" style={{ width: '75px', height: '75px', objectFit: 'contain' }} />
+                        </td>
+                        <td className="text-left" style={{ paddingLeft: '15px', verticalAlign: 'middle', paddingBottom: '12px' }}>
+                          <h1 style={{ fontFamily: 'Arial, sans-serif', fontSize: '18px', fontWeight: 'bold', margin: '0', textTransform: 'uppercase' }}>
+                            The Last Salle University
+                          </h1>
+                          <p style={{ fontFamily: 'Arial, sans-serif', fontSize: '11px', fontWeight: 'bold', color: '#374151', textTransform: 'uppercase', margin: '2px 0 0 0' }}>
+                            Office of the University Registrar
+                          </p>
+                          <p style={{ fontFamily: 'Arial, sans-serif', fontSize: '9px', color: '#6b7280', margin: '1px 0 0 0' }}>
+                            Brgy. San Jose, Lipa City, Batangas, Philippines
+                          </p>
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+
+                  {/* Title Block */}
+                  <div className="text-center" style={{ margin: '15px 0 10px 0' }}>
+                    <h2 style={{ fontFamily: 'Arial, sans-serif', fontSize: '13px', fontWeight: 'bold', textTransform: 'uppercase', color: '#0f172a', margin: '0' }}>
+                      Shiftee Program Transition Evaluation Report
+                    </h2>
+                    <p style={{ fontFamily: 'Georgia, serif', fontSize: '10px', fontStyle: 'italic', color: '#374151', margin: '3px 0 0 0' }}>
+                      Document Code Reference: OREG-SHIFT-EVAL-2026
+                    </p>
+                  </div>
+
+                  {/* Profile Table */}
+                  <table className="w-full text-xs" style={{ borderCollapse: 'collapse', fontFamily: 'Arial, sans-serif', margin: '10px 0' }}>
+                    <tbody>
+                      <tr style={{ borderBottom: '1px solid #e5e7eb' }}>
+                        <td style={{ padding: '5px 0', fontWeight: 'bold', color: '#4b5563', textTransform: 'uppercase', fontSize: '9px', width: '25%' }}>Student Name:</td>
+                        <td className="print-academic-font-bold" style={{ padding: '5px 0', color: '#000000', textTransform: 'uppercase' }}>{activeReportData.name}</td>
+                        <td style={{ padding: '5px 0', fontWeight: 'bold', color: '#4b5563', textTransform: 'uppercase', fontSize: '9px', width: '25%' }}>Student ID No:</td>
+                        <td className="print-academic-font-bold" style={{ padding: '5px 0', color: '#000000' }}>{activeReportData.studentId}</td>
+                      </tr>
+                      <tr style={{ borderBottom: '1px solid #e5e7eb' }}>
+                        <td style={{ padding: '5px 0', fontWeight: 'bold', color: '#4b5563', textTransform: 'uppercase', fontSize: '9px' }}>Previous Program:</td>
+                        <td className="print-academic-font-bold" style={{ padding: '5px 0', color: '#000000' }}>{activeReportData.prevProgram}</td>
+                        <td style={{ padding: '5px 0', fontWeight: 'bold', color: '#4b5563', textTransform: 'uppercase', fontSize: '9px' }}>New Program:</td>
+                        <td className="print-academic-font-bold" style={{ padding: '5px 0', color: '#000000' }}>{activeReportData.newProgram || 'N/A'}</td>
+                      </tr>
+                      <tr style={{ borderBottom: '1px solid #e5e7eb' }}>
+                        <td style={{ padding: '5px 0', fontWeight: 'bold', color: '#4b5563', textTransform: 'uppercase', fontSize: '9px' }}>Assigned Curriculum:</td>
+                        <td className="print-academic-font-bold" style={{ padding: '5px 0', color: '#000000' }}>{activeReportData.curriculum} Framework</td>
+                        <td style={{ padding: '5px 0', fontWeight: 'bold', color: '#4b5563', textTransform: 'uppercase', fontSize: '9px' }}>Evaluation Date:</td>
+                        <td className="print-academic-font-bold" style={{ padding: '5px 0', color: '#000000' }}>{currentTimestamp}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+
+                  {/* Summary Metrics */}
+                  <div style={{ marginTop: '15px' }}>
+                    <h3 style={{ fontFamily: 'Arial, sans-serif', fontSize: '11px', fontWeight: 'bold', textTransform: 'uppercase', borderBottom: '1.5px solid #000000', paddingBottom: '3px' }}>
+                      I. Program Transition Progress Summary
+                    </h3>
+                    <p className="print-academic-font" style={{ margin: '5px 0 10px 0' }}>
+                      Following cross-credit evaluation against the new program's curriculum requirements, the student's current standing is compiled below:
+                    </p>
+                    <table className="w-full text-center" style={{ borderCollapse: 'collapse', fontSize: '10px', border: '1px solid #d1d5db' }}>
+                      <thead>
+                        <tr style={{ backgroundColor: '#f9fafb', borderBottom: '1px solid #d1d5db', fontFamily: 'Arial, sans-serif', fontWeight: 'bold' }}>
+                          <th style={{ padding: '5px', borderRight: '1px solid #d1d5db' }}>Units Earned</th>
+                          <th style={{ padding: '5px', borderRight: '1px solid #d1d5db' }}>Units Remaining</th>
+                          <th style={{ padding: '5px', borderRight: '1px solid #d1d5db' }}>Total Required Units</th>
+                          <th style={{ padding: '5px' }}>Completion Progress</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr className="print-academic-font-bold" style={{ textAlign: 'center' }}>
+                          <td style={{ padding: '5px', borderRight: '1px solid #d1d5db', color: '#059669' }}>{data.unitsEarned || 0} Units</td>
+                          <td style={{ padding: '5px', borderRight: '1px solid #d1d5db', color: '#dc2626' }}>{data.unitsRemaining || 0} Units</td>
+                          <td style={{ padding: '5px', borderRight: '1px solid #d1d5db' }}>{data.totalRequired || 0} Units</td>
+                          <td style={{ padding: '5px', color: '#2563eb' }}>{data.completionPercentage}%</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Credited Subjects */}
+                  <div style={{ marginTop: '20px' }}>
+                    <h3 style={{ fontFamily: 'Arial, sans-serif', fontSize: '11px', fontWeight: 'bold', textTransform: 'uppercase', borderBottom: '1.5px solid #000000', paddingBottom: '3px' }}>
+                      II. Cross-Credited Subjects
+                    </h3>
+                    <table className="w-full text-left" style={{ borderCollapse: 'collapse', border: '1px solid #000000', fontSize: '10px', marginTop: '5px' }}>
+                      <thead>
+                        <tr style={{ backgroundColor: '#f3f4f6', borderBottom: '1.5px solid #000000', fontFamily: 'Arial, sans-serif', fontWeight: 'bold' }}>
+                          <th style={{ padding: '5px', width: '20%', borderRight: '1px solid #000000' }}>Subject Code</th>
+                          <th style={{ padding: '5px', width: '45%', borderRight: '1px solid #000000' }}>Subject Description Title</th>
+                          <th style={{ padding: '5px', width: '15%', borderRight: '1px solid #000000', textAlign: 'center' }}>Units</th>
+                          <th style={{ padding: '5px', width: '10%', borderRight: '1px solid #000000', textAlign: 'center' }}>Grade</th>
+                          <th style={{ padding: '5px', width: '10%', textAlign: 'center' }}>Status</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {data.creditedList && data.creditedList.length > 0 ? (
+                          data.creditedList.map((s, idx) => (
+                            <tr key={idx} style={{ borderBottom: '1px solid #e5e7eb' }}>
+                              <td className="print-academic-font-bold" style={{ padding: '4px 5px', borderRight: '1px solid #e5e7eb' }}>{s.code}</td>
+                              <td className="print-academic-font" style={{ padding: '4px 5px', borderRight: '1px solid #e5e7eb' }}>{s.title}</td>
+                              <td className="print-academic-font" style={{ padding: '4px 5px', borderRight: '1px solid #e5e7eb', textAlign: 'center' }}>{s.units}</td>
+                              <td className="print-academic-font-bold" style={{ padding: '4px 5px', borderRight: '1px solid #e5e7eb', textAlign: 'center' }}>{s.grade}</td>
+                              <td className="print-academic-font-bold" style={{ padding: '4px 5px', textAlign: 'center', color: '#059669' }}>{s.status}</td>
+                            </tr>
+                          ))
+                        ) : (
+                          <tr>
+                            <td colSpan="5" className="print-academic-font" style={{ padding: '10px', textAlign: 'center', fontStyle: 'italic', color: '#6b7280' }}>No cross-credited subjects recorded.</td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Page Footer */}
+                  <div style={{ marginTop: '50px', paddingTop: '10px', borderTop: '1px solid #e5e7eb', display: 'flex', justifyContent: 'space-between', fontSize: '9px', color: '#9ca3af' }}>
+                    <span>University Evaluation Report System (OREG-SHIFT-EVAL-2026)</span>
+                    <span>Page 1 of 2</span>
+                  </div>
+
+                </div>
+
+                {/* Print separation gap */}
+                <div className="print-page-break"></div>
+
+                {/* ================= SHIFTEE REPORT PAGE 2: RECOMMENDED STUDY PLAN ================= */}
+                <div className="print-page pt-0 mt-0">
+
+                  <div className="text-center" style={{ margin: '0 0 20px 0' }}>
+                    <h2 style={{ fontFamily: 'Arial, sans-serif', fontSize: '13px', fontWeight: 'bold', textTransform: 'uppercase', color: '#0f172a', margin: '0' }}>
+                      Recommended Course Plan & Progression Roadmap
+                    </h2>
+                    <p style={{ fontFamily: 'Georgia, serif', fontSize: '10px', fontStyle: 'italic', color: '#374151', margin: '3px 0 0 0' }}>
+                      Sequenced Course Load for Shiftee Program Transition
+                    </p>
+                  </div>
+
+                  {/* Deficiencies */}
+                  <div>
+                    <h3 style={{ fontFamily: 'Arial, sans-serif', fontSize: '11px', fontWeight: 'bold', textTransform: 'uppercase', borderBottom: '1.5px solid #000000', paddingBottom: '3px' }}>
+                      III. Academic Standing & Deficiencies
+                    </h3>
+                    {data.deficiencies && data.deficiencies.length > 0 ? (
+                      <table className="w-full text-left" style={{ borderCollapse: 'collapse', border: '1px solid #000000', fontSize: '10px', marginTop: '5px' }}>
+                        <thead>
+                          <tr style={{ backgroundColor: '#f3f4f6', borderBottom: '1.5px solid #000000', fontFamily: 'Arial, sans-serif', fontWeight: 'bold' }}>
+                            <th style={{ padding: '5px', width: '20%', borderRight: '1px solid #000000' }}>Course Code</th>
+                            <th style={{ padding: '5px', width: '80%' }}>Deficiency Description</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {data.deficiencies.map((def, idx) => {
+                            const codeMatch = def.match(/\[([^\]]+)\]/);
+                            const code = codeMatch ? codeMatch[1] : '—';
+                            const description = def.replace(/\s*\[[^\]]+\]\s*$/, '').trim();
+                            return (
+                              <tr key={idx} style={{ borderBottom: '1px solid #e5e7eb' }}>
+                                <td className="print-academic-font-bold" style={{ padding: '4px 5px', borderRight: '1px solid #e5e7eb', color: '#991b1b' }}>{code}</td>
+                                <td className="print-academic-font" style={{ padding: '4px 5px', color: '#991b1b' }}>{description}</td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    ) : (
+                      <div style={{ border: '1px solid #e5e7eb', borderRadius: '4px', padding: '8px', minHeight: '40px' }}>
+                        <p className="print-academic-font" style={{ fontStyle: 'italic', color: '#059669', margin: '0', fontWeight: 'bold' }}>
+                          No deficiencies found. Student is cleared for standard progressions.
+                        </p>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Recommended Semester Plan */}
+                  <div style={{ marginTop: '20px' }}>
+                    <h3 style={{ fontFamily: 'Arial, sans-serif', fontSize: '11px', fontWeight: 'bold', textTransform: 'uppercase', borderBottom: '1.5px solid #000000', paddingBottom: '3px' }}>
+                      IV. Sequential Priority Plan (Recommended Enrollment Load)
+                    </h3>
+                    <p className="print-academic-font" style={{ margin: '5px 0 10px 0' }}>
+                      This recommended load prioritizes not-yet-completed subjects under the new program, sequenced by year level and semester, within the permitted credit boundary:
+                    </p>
+
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+                      {data.recommendedRoadmap && data.recommendedRoadmap.length > 0 ? (
+                        data.recommendedRoadmap.map((term, index) => (
+                          <div key={index} style={{ border: '1px solid #000000', borderRadius: '4px', overflow: 'hidden' }}>
+                            <div style={{ backgroundColor: '#f3f4f6', padding: '6px', borderBottom: '1px solid #000000', fontSize: '9px', fontWeight: 'bold', textTransform: 'uppercase', display: 'flex', justifyContent: 'space-between' }}>
+                              <span>{term.term}</span>
+                              <span>Load: {term.totalUnits} Units</span>
+                            </div>
+                            <table className="w-full text-left" style={{ borderCollapse: 'collapse', fontSize: '10px' }}>
+                              <thead>
+                                <tr style={{ borderBottom: '1px solid #e5e7eb', backgroundColor: '#fafafa', color: '#4b5563' }}>
+                                  <th style={{ padding: '4px 8px', width: '20%' }}>Course Code</th>
+                                  <th style={{ padding: '4px 8px', width: '65%' }}>Course Title Description</th>
+                                  <th style={{ padding: '4px 8px', width: '15%', textAlign: 'right' }}>Units</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {term.subjects.map((s) => (
+                                  <tr key={s.code} style={{ borderBottom: '1px solid #e5e7eb' }}>
+                                    <td className="print-academic-font-bold" style={{ padding: '4px 8px' }}>{s.code}</td>
+                                    <td className="print-academic-font" style={{ padding: '4px 8px' }}>{s.title}</td>
+                                    <td className="print-academic-font-bold" style={{ padding: '4px 8px', textAlign: 'right' }}>{s.units} u</td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        ))
+                      ) : (
+                        <div style={{ border: '1px solid #000000', borderRadius: '4px', padding: '10px' }}>
+                          <p className="print-academic-font" style={{ fontStyle: 'italic', color: '#6b7280', margin: '0', textAlign: 'center' }}>
+                            No subjects could be scheduled for the upcoming term.
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Verification & Sign-off Block */}
+                  <div style={{ marginTop: '35px' }}>
+                    <table className="w-full" style={{ borderCollapse: 'collapse', fontSize: '11px', fontWeight: 'bold' }}>
+                      <tbody>
+                        <tr>
+                          <td style={{ width: '45%', textAlign: 'left', verticalAlign: 'top' }}>
+                            <div style={{ height: '40px' }}></div>
+                            <div style={{ borderTop: '1px solid #000000', paddingTop: '4px', width: '220px' }}>
+                              <p className="print-academic-font-bold" style={{ margin: '0', textTransform: 'uppercase' }}>
+                                Authorized Registrar Officer
+                              </p>
+                              <p style={{ margin: '2px 0 0 0', fontSize: '9px', color: '#4b5563', fontWeight: 'normal' }}>
+                                Office of the University Registrar
+                              </p>
+                            </div>
+                          </td>
+                          <td style={{ width: '10%' }}></td>
+                          <td style={{ width: '45%', textAlign: 'left', verticalAlign: 'top' }}>
+                            <div style={{ height: '40px' }}></div>
+                            <div style={{ borderTop: '1px solid #000000', paddingTop: '4px', width: '220px' }}>
+                              <p className="print-academic-font-bold" style={{ margin: '0', textTransform: 'uppercase' }}>
+                                {activeReportData.name}
+                              </p>
+                              <p style={{ margin: '2px 0 0 0', fontSize: '9px', color: '#4b5563', fontWeight: 'normal' }}>
+                                Shiftee Candidate Acknowledgment
+                              </p>
+                            </div>
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Page Footer */}
+                  <div style={{ marginTop: '40px', paddingTop: '10px', borderTop: '1px solid #e5e7eb', display: 'flex', justifyContent: 'space-between', fontSize: '9px', color: '#9ca3af' }}>
+                    <span>University Evaluation Report System (OREG-SHIFT-EVAL-2026)</span>
+                    <span>Page 2 of 2</span>
+                  </div>
+
+                </div>
+              </>
             ) : (
               /* ================= TRANSFEREE / DEFAULT REPORT (unchanged) ================= */
               <>
@@ -631,17 +1543,33 @@ const isReturningReport = activeReportData.type === 'returning' || activeReportD
                     <p className="print-academic-font" style={{ margin: '5px 0' }}>
                       The registry has identified the following prerequisite chains that are currently broken or require priority completion:
                     </p>
-                    <div style={{ border: '1px solid #e5e7eb', borderRadius: '4px', padding: '8px', minHeight: '60px' }}>
-                      {data.deficiencies && data.deficiencies.length > 0 ? (
-                        <ul style={{ margin: '0', paddingLeft: '15px', color: '#991b1b' }} className="print-academic-font-bold">
-                          {data.deficiencies.map((def, idx) => (
-                            <li key={idx} style={{ padding: '2px 0' }}>{def}</li>
-                          ))}
-                        </ul>
-                      ) : (
+{data.deficiencies && data.deficiencies.length > 0 ? (
+                      <table className="w-full text-left" style={{ borderCollapse: 'collapse', border: '1px solid #000000', fontSize: '10px', marginTop: '5px' }}>
+                        <thead>
+                          <tr style={{ backgroundColor: '#f3f4f6', borderBottom: '1.5px solid #000000', fontFamily: 'Arial, sans-serif', fontWeight: 'bold' }}>
+                            <th style={{ padding: '5px', width: '20%', borderRight: '1px solid #000000' }}>Course Code</th>
+                            <th style={{ padding: '5px', width: '80%' }}>Deficiency Description</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {data.deficiencies.map((def, idx) => {
+                            const codeMatch = def.match(/\[([^\]]+)\]/);
+                            const code = codeMatch ? codeMatch[1] : '—';
+                            const description = def.replace(/\s*\[[^\]]+\]\s*$/, '').trim();
+                            return (
+                              <tr key={idx} style={{ borderBottom: '1px solid #e5e7eb' }}>
+                                <td className="print-academic-font-bold" style={{ padding: '4px 5px', borderRight: '1px solid #e5e7eb', color: '#991b1b' }}>{code}</td>
+                                <td className="print-academic-font" style={{ padding: '4px 5px', color: '#991b1b' }}>{description}</td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    ) : (
+                      <div style={{ border: '1px solid #e5e7eb', borderRadius: '4px', padding: '8px', minHeight: '40px' }}>
                         <p className="print-academic-font" style={{ fontStyle: 'italic', color: '#4b5563', margin: '0' }}>No prerequisite chain locks detected. Student is cleared for standard progressions.</p>
-                      )}
-                    </div>
+                      </div>
+                    )}
                   </div>
 
                   {/* Recommended Semester Course Plan (Roadmap) */}
@@ -654,7 +1582,7 @@ const isReturningReport = activeReportData.type === 'returning' || activeReportD
                     </p>
 
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
-                      {data.recommendedRoadmap && data.recommendedRoadmap.slice(0, 3).map((term, index) => (
+                      {data.recommendedRoadmap && data.recommendedRoadmap.map((term, index) => (
                         <div key={index} style={{ border: '1px solid #000000', borderRadius: '4px', overflow: 'hidden' }}>
                           <div style={{ backgroundColor: '#f3f4f6', padding: '6px', borderBottom: '1px solid #000000', fontSize: '9px', fontWeight: 'bold', textTransform: 'uppercase', display: 'flex', justifyContent: 'space-between' }}>
                             <span>Schedule: {term.term}</span>

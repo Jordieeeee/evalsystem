@@ -1,7 +1,7 @@
 export function runShifteeEvaluation(catalog, subjectStatuses, passedCodes, currentStudentData, newShifteeProgram) {
   let subjectList = [], deficiencies = [], alerts = [];
   let unitsEarned = 0, unitsRemaining = 0;
-  let obsoleteList = [];
+  let obsoleteList = [], creditedList = [], missingSubjects = [];
 
   alerts.push("Shiftee Core Framework Active: Extracting common cross-credited general education paths.");
 
@@ -24,36 +24,51 @@ export function runShifteeEvaluation(catalog, subjectStatuses, passedCodes, curr
 
     const isGeneralEducation = codeClean.startsWith("GE") || codeClean.startsWith("NSTP") || codeClean.startsWith("PATHFIT");
 
-    if (['Completed', 'Credited'].includes(info.status)) {
-      unitsEarned += unitsValue;
-    } else {
-      unitsRemaining += unitsValue;
-      if (!isGeneralEducation) {
-        deficiencies.push(`New Track Specific Deficiency: Missing required discipline course [${codeClean}]`);
-      }
-    }
-
-    subjectList.push({
+ const courseObj = {
       code: codeClean,
+      originalSubject: codeClean,
       title: course.courseTitle || course.title,
       units: unitsValue,
       status: info.status,
       grade: info.grade,
       missingPrereqs: [],
       prereqsCleared: true
-    });
+    };
+
+    if (['Completed', 'Credited'].includes(info.status)) {
+      unitsEarned += unitsValue;
+      if (info.status === 'Credited') creditedList.push(courseObj);
+    } else {
+      unitsRemaining += unitsValue;
+      missingSubjects.push(courseObj);
+      // Only genuinely blocked subjects (failed, or an active prerequisite
+      // lock) belong in "deficiencies" — a subject simply not yet reached
+      // in the normal course sequence is NOT a deficiency, it's just
+      // upcoming coursework and belongs in the roadmap instead.
+      if (info.status === 'Failed') {
+        deficiencies.push(`Failed Subject: [${codeClean}] ${course.courseTitle || course.title} — requires retake.`);
+      }
+    }
+
+    subjectList.push(courseObj);
   });
 
-  return {
+  const totalRequired = unitsEarned + unitsRemaining;
+
+return {
     unitsEarned,
     unitsRemaining,
+    totalRequired,
     subjectList,
     obsoleteList,
+    missingSubjects,
     deficiencies,
     alerts,
     overallEligibility: deficiencies.length > 3 ? "Requires Registrar Review" : "Curriculum Transition Complete",
-    // --- SAFE FALLBACKS TO PREVENT UI CRASHES ---
-    creditedList: [],
+    creditedList,
+    // recommendedRoadmap is deliberately left empty here — the index file's
+    // central dispatcher builds shiftee's roadmap itself (grouped by catalog
+    // year/semester, same as returning & regular) and overrides this field.
     recommendedRoadmap: []
   };
 }
